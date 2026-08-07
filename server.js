@@ -10,15 +10,23 @@ const connectDB = require("./config/dbconnect");
 const corsOptions = require("./config/coresoption");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-connectDB();
+// Middleware لضمان الاتصال بـ MongoDB قبل معالجة أي Request على Vercel
+app.use(async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (err) {
+        console.error("Database Connection Error:", err);
+        res.status(500).json({ message: "Internal Server Error - DB Connection Failed" });
+    }
+});
 
 app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 
-// Serving static files (CSS, JS, Images)
+// Serving static files
 app.use(express.static(path.join(__dirname, "public")));
 
 // Routes
@@ -26,7 +34,7 @@ app.use("/", require("./routes/root"));
 app.use("/auth", require("./routes/authRoutes"));
 app.use("/users", require("./routes/usersroute"));
 
-// 404 Handler for all unknown routes
+// 404 Handler
 app.all(/(.*)/, (req, res) => {
     res.status(404);
     if (req.accepts("html")) {
@@ -38,15 +46,4 @@ app.all(/(.*)/, (req, res) => {
     }
 });
 
-// Database Connection & Server Listener
-mongoose.connection.once("open", () => {
-    console.log("Connected to MongoDB");
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-    });
-});
-
-mongoose.connection.on("error", (err) => {
-    console.log("MongoDB Event Error:", err);
-});
 module.exports = app;
