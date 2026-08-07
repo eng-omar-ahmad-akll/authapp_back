@@ -49,3 +49,4 @@ mongoose.connection.once("open", () => {
 mongoose.connection.on("error", (err) => {
     console.log("MongoDB Event Error:", err);
 });
+module.exports = app;
