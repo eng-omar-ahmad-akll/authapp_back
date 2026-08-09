@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const mongoose = require("mongoose");
+const mongoSanitize = require("express-mongo-sanitize");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const path = require("path");
@@ -10,7 +11,7 @@ const connectDB = require("./config/dbconnect");
 const corsOptions = require("./config/coresoption");
 
 const app = express();
-
+app.use(mongoSanitize());
 // Middleware لضمان الاتصال بـ MongoDB قبل معالجة أي Request على Vercel
 app.use(async (req, res, next) => {
     try {
