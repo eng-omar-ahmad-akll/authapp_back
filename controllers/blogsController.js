@@ -29,18 +29,25 @@ const getBlogById = async (req, res) => {
 const createBlog = async (req, res) => {
     try {
         const { title, content, tags } = req.body;
-        
-        // req.user بيجي من verifyJWT middleware
+
+        // تأكد من مسمى الـ ID القادم من verifyJWT
+        const userId = req.user?.id || req.user?._id || req.user;
+
+        if (!userId) {
+            return res.status(401).json({ status: "fail", message: "User ID not found in token" });
+        }
+
         const newBlog = await Blog.create({
             title,
             content,
             tags,
-            author: req.user.id
+            author: userId
         });
 
         return res.status(201).json({ status: "success", data: newBlog });
     } catch (err) {
-        return res.status(500).json({ status: "error", message: "Failed to create blog" });
+        // إرجاع تفاصيل الخطأ لمعرفته بدقة أثناء التست
+        return res.status(500).json({ status: "error", message: err.message });
     }
 };
 
