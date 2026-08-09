@@ -1,5 +1,10 @@
 const Blog = require("../models/Blog");
 
+// دالة مساعدة موحدة لاستخراج الـ ID الخاص بالـ User من الـ Token
+const getUserIdFromReq = (req) => {
+    return req.user?.UserInfo?.id || req.user?.id || req.user?._id;
+};
+
 // 1. Get All Blogs (Public)
 const getAllBlogs = async (req, res) => {
     try {
@@ -29,9 +34,7 @@ const getBlogById = async (req, res) => {
 const createBlog = async (req, res) => {
     try {
         const { title, content, tags } = req.body;
-
-        // تأكد من مسمى الـ ID القادم من verifyJWT
-        const userId = req.user?.id || req.user?._id || req.user;
+        const userId = getUserIdFromReq(req);
 
         if (!userId) {
             return res.status(401).json({ status: "fail", message: "User ID not found in token" });
@@ -41,12 +44,11 @@ const createBlog = async (req, res) => {
             title,
             content,
             tags,
-            author: userId
+            author: userId // بيتسجل بنفس صيغة الـ ID الصح
         });
 
         return res.status(201).json({ status: "success", data: newBlog });
     } catch (err) {
-        // إرجاع تفاصيل الخطأ لمعرفته بدقة أثناء التست
         return res.status(500).json({ status: "error", message: err.message });
     }
 };
@@ -59,10 +61,9 @@ const updateBlog = async (req, res) => {
             return res.status(404).json({ status: "fail", message: "Blog not found" });
         }
 
-        // استخراج الـ ID المظبوط من الـ Token
-        const userId = req.user?.UserInfo?.id || req.user?.id || req.user?._id;
+        const userId = getUserIdFromReq(req);
 
-        // Authorization Check: صاحبه فقط
+        // التحقق من الملكية
         if (blog.author.toString() !== userId?.toString()) {
             return res.status(403).json({ status: "fail", message: "Unauthorized to update this blog" });
         }
@@ -82,10 +83,9 @@ const deleteBlog = async (req, res) => {
             return res.status(404).json({ status: "fail", message: "Blog not found" });
         }
 
-        // استخراج الـ ID المظبوط من الـ Token
-        const userId = req.user?.UserInfo?.id || req.user?.id || req.user?._id;
+        const userId = getUserIdFromReq(req);
 
-        // Authorization Check: صاحبه فقط
+        // التحقق من الملكية
         if (blog.author.toString() !== userId?.toString()) {
             return res.status(403).json({ status: "fail", message: "Unauthorized to delete this blog" });
         }
