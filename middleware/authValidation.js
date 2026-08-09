@@ -3,9 +3,12 @@ const Joi = require("joi");
 // Pattern to block NoSQL injection chars ($) and HTML/Script tags (<, >, {, }, \)
 const safeStringPattern = /^[^$<>{}\\]*$/;
 
+// OWASP Regex for strong password: min 8, 1 upper, 1 lower, 1 digit, 1 special char
+const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._-]).{8,128}$/;
+
 const options = {
     abortEarly: false,
-    stripUnknown: true // OWASP Protection: strips unauthorized/extra fields (Mass Assignment)
+    stripUnknown: true // OWASP Protection: Mass Assignment Mitigation
 };
 
 // 1. Protected Register Schema
@@ -30,7 +33,8 @@ const registerSchema = Joi.object({
         .required()
         .messages({
             "string.pattern.base": "Last name contains forbidden special characters",
-            "string.empty": "Last name is required"
+            "string.empty": "Last name is required",
+            "string.min": "Last name must be at least 2 characters long"
         }),
 
     email: Joi.string()
@@ -45,11 +49,10 @@ const registerSchema = Joi.object({
         }),
 
     password: Joi.string()
-        .min(8)
-        .max(128)
         .required()
+        .pattern(strongPasswordPattern)
         .messages({
-            "string.min": "Password must be at least 8 characters long",
+            "string.pattern.base": "Password must include uppercase, lowercase, number and special character (@$!%*?&#._-)",
             "string.empty": "Password is required"
         })
 });
