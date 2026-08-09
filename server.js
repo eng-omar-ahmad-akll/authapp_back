@@ -11,8 +11,13 @@ const connectDB = require("./config/dbconnect");
 const corsOptions = require("./config/coresoption");
 
 const app = express();
-app.use(mongoSanitize());
-// Middleware لضمان الاتصال بـ MongoDB قبل معالجة أي Request على Vercel
+// Custom Sanitization Middleware (Safe for Vercel Serverless)
+app.use((req, res, next) => {
+    if (req.body) mongoSanitize.sanitize(req.body);
+    if (req.params) mongoSanitize.sanitize(req.params);
+    next();
+});
+
 app.use(async (req, res, next) => {
     try {
         await connectDB();
