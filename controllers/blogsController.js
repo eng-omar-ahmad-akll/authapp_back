@@ -51,7 +51,7 @@ const createBlog = async (req, res) => {
     }
 };
 
-// 4. Update Blog (Protected - Owner or Admin)
+// 4. Update Blog (Protected - Owner Only)
 const updateBlog = async (req, res) => {
     try {
         const blog = await Blog.findById(req.params.id);
@@ -59,19 +59,22 @@ const updateBlog = async (req, res) => {
             return res.status(404).json({ status: "fail", message: "Blog not found" });
         }
 
-        // Authorization Check
-        if (blog.author.toString() !== req.user.id && req.user.role !== "Admin") {
+        // استخراج الـ ID المظبوط من الـ Token
+        const userId = req.user?.UserInfo?.id || req.user?.id || req.user?._id;
+
+        // Authorization Check: صاحبه فقط
+        if (blog.author.toString() !== userId?.toString()) {
             return res.status(403).json({ status: "fail", message: "Unauthorized to update this blog" });
         }
 
         const updatedBlog = await Blog.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
         return res.status(200).json({ status: "success", data: updatedBlog });
     } catch (err) {
-        return res.status(500).json({ status: "error", message: "Failed to update blog" });
+        return res.status(500).json({ status: "error", message: err.message });
     }
 };
 
-// 5. Delete Blog (Protected - Owner or Admin)
+// 5. Delete Blog (Protected - Owner Only)
 const deleteBlog = async (req, res) => {
     try {
         const blog = await Blog.findById(req.params.id);
@@ -79,14 +82,18 @@ const deleteBlog = async (req, res) => {
             return res.status(404).json({ status: "fail", message: "Blog not found" });
         }
 
-        if (blog.author.toString() !== req.user.id && req.user.role !== "Admin") {
+        // استخراج الـ ID المظبوط من الـ Token
+        const userId = req.user?.UserInfo?.id || req.user?.id || req.user?._id;
+
+        // Authorization Check: صاحبه فقط
+        if (blog.author.toString() !== userId?.toString()) {
             return res.status(403).json({ status: "fail", message: "Unauthorized to delete this blog" });
         }
 
         await blog.deleteOne();
         return res.status(200).json({ status: "success", message: "Blog deleted successfully" });
     } catch (err) {
-        return res.status(500).json({ status: "error", message: "Failed to delete blog" });
+        return res.status(500).json({ status: "error", message: err.message });
     }
 };
 
