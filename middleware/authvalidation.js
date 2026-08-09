@@ -87,7 +87,7 @@ const validateRegister = (req, res, next) => {
 };
 
 const validateLogin = (req, res, next) => {
-    const { error, value } = validateLoginSchema = loginSchema.validate(req.body, options);
+    const { error, value } = loginSchema.validate(req.body, options);
     
     if (error) {
         const errorsList = error.details.map((detail) => detail.message);
