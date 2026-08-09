@@ -32,7 +32,7 @@ const register = async (req, res) => { // أضيفت async هنا
                 }
             },
             process.env.ACCESS_TOKEN_SECRET,
-            { expiresIn: "5m" }
+            { expiresIn: "10m" }
         );
 
         const refreshToken = jwt.sign(
@@ -89,7 +89,7 @@ const login = async (req, res) => {
                 }
             },
             process.env.ACCESS_TOKEN_SECRET,
-            { expiresIn: "5m" }
+            { expiresIn: "10m" }
         );
 
         const refreshToken = jwt.sign(
