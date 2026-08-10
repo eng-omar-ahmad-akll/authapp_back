@@ -56,8 +56,9 @@ const register = asyncHandler(async (req, res) => {
 
 // 2. Login User
 const login = asyncHandler(async (req, res) => {
+    console.log("RECEIVED BODY:", req.body); // طباعة الـ Body لتفقدها في الـ Logs
+
     const { email, password } = req.body;
-    // استلام الكود بأي مسمى ممكن
     const rawCode = req.body.twoFactorCode || req.body.code || req.body.token || req.body.totpCode;
 
     const foundUser = await User.findOne({ email }).exec();
@@ -87,7 +88,7 @@ const login = asyncHandler(async (req, res) => {
             secret: foundUser.twoFactorSecret,
             encoding: "base32",
             token: cleanToken,
-            window: 1 // معالجة فروق التوقيت حتى 30 ثانية قبل أو بعد
+            window: 1
         });
 
         if (!verified) {

@@ -16,19 +16,19 @@ const app = express();
 // Connect to Database
 connectDB();
 
-// 1. Sanitization Middleware
+// 1. Core Middlewares (يجب تحليل الـ Body أولاً!)
+app.use(cors(corsOptions));
+app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// 2. Sanitization Middleware (بعد تحليل الـ Body مباشرة)
 app.use((req, res, next) => {
     if (req.body) mongoSanitize.sanitize(req.body);
     if (req.params) mongoSanitize.sanitize(req.params);
     if (req.query) mongoSanitize.sanitize(req.query);
     next();
 });
-
-// 2. Core Middlewares
-app.use(cors(corsOptions));
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // 3. Static Files
 app.use(express.static(path.join(__dirname, "public")));
@@ -39,7 +39,7 @@ app.use("/auth", require("./routes/authRoutes"));
 app.use("/users", require("./routes/usersRoute"));
 app.use("/blogs", require("./routes/blogRoutes"));
 
-// 5. Safe 404 Handler (متوافق تماماً بدون نصوص Regex قديمة)
+// 5. Safe 404 Handler
 app.use((req, res) => {
     res.status(404);
     if (req.accepts("html")) {
