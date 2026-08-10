@@ -13,13 +13,15 @@ const blogSchema = new mongoose.Schema(
             type: String,
             required: [true, "Blog content is required"],
             trim: true,
-            minlength: [10, "Content must be at least 10 characters long"]
+            minlength: [10, "Content must be at least 10 characters long"],
+            maxlength: [50000, "Content cannot exceed 50,000 characters"] // حماية من DoS على مستوى الـ Schema
         },
         tags: [
             {
                 type: String,
                 trim: true,
-                lowercase: true // تحويل الهاشتاج للحروف الصغيرة لتسهيل البحث
+                lowercase: true, // تحويل الهاشتاج للحروف الصغيرة لتسهيل البحث
+                maxlength: [30, "Tag cannot exceed 30 characters"]
             }
         ],
         author: {
@@ -29,12 +31,21 @@ const blogSchema = new mongoose.Schema(
         }
     },
     {
-        timestamps: true
+        timestamps: true,
+        toJSON: {
+            transform(doc, ret) {
+                delete ret.__v; // إزالة الـ versionKey غير الضروري في الـ Responses
+                return ret;
+            }
+        }
     }
 );
 
-// تحسين الأداء: تسريع عمليات الترتيب والبحث بحسب الكاتب والتاريخ
+// 1. تحسين الأداء: تسريع عمليات الاستعلام المباشرة بحسب الكاتب والتاريخ
 blogSchema.index({ author: 1, createdAt: -1 });
 blogSchema.index({ createdAt: -1 });
+
+// 2. تسريع البحث النصي Full-Text Search في العنوان والـ Tags
+blogSchema.index({ title: "text", tags: "text" });
 
 module.exports = mongoose.model("Blog", blogSchema);

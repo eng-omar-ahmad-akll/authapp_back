@@ -9,9 +9,10 @@ const globalErrorHandler = (err, req, res, next) => {
     let message = err.message || "Internal Server Error";
 
     // معالجة خطأ معرف Mongoose غير المكتمل أو المطبوع بخطأ (CastError)
+    // OWASP Mitigation: عدم إرجاع قيمة err.value لتجنب Reflected XSS / Injection
     if (err.name === "CastError") {
         statusCode = 400;
-        message = `Invalid resource ID format: ${err.value}`;
+        message = "Invalid resource ID format";
     }
 
     // معالجة أخطاء القيود المكررة مثل الإيميل المكرر في Mongoose (Duplicate Key Error)

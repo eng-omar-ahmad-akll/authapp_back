@@ -4,7 +4,7 @@ const Joi = require("joi");
 const safeStringPattern = /^[^$<>{}\\]*$/;
 
 // OWASP Pattern لكلمات المرور القوية (8-128 حرف، حرف كبير، حرف صغير، رقم، ورمز خاص)
-const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._\--]).{8,128}$/;
+const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._-]).{8,128}$/;
 
 const options = {
     abortEarly: false,     // إرجاع جميع أخطاء المدخلات دفعة واحدة
@@ -59,7 +59,7 @@ const registerSchema = Joi.object({
         })
 });
 
-// 2. Schema تسجيل الدخول (تمت إضافة حقول 2FA)
+// 2. Schema تسجيل الدخول
 const loginSchema = Joi.object({
     email: Joi.string()
         .email({ tlds: { allow: false } })
@@ -82,6 +82,42 @@ const loginSchema = Joi.object({
     totpCode: Joi.string().trim().optional().allow("", null),
     code: Joi.string().trim().optional().allow("", null),
     token: Joi.string().trim().optional().allow("", null)
+});
+
+// 3. Schema استعادة كلمة المرور
+const forgotPasswordSchema = Joi.object({
+    email: Joi.string()
+        .email({ tlds: { allow: false } })
+        .trim()
+        .lowercase()
+        .required()
+        .messages({
+            "string.email": "Please provide a valid email address",
+            "string.empty": "Email is required"
+        })
+});
+
+// 4. Schema إعادة تعيين كلمة المرور
+const resetPasswordSchema = Joi.object({
+    email: Joi.string()
+        .email({ tlds: { allow: false } })
+        .trim()
+        .lowercase()
+        .required(),
+    otp: Joi.string()
+        .length(6)
+        .pattern(/^\d+$/)
+        .required()
+        .messages({
+            "string.length": "OTP must be exactly 6 digits",
+            "string.pattern.base": "OTP must contain numbers only"
+        }),
+    newPassword: Joi.string()
+        .required()
+        .pattern(strongPasswordPattern)
+        .messages({
+            "string.pattern.base": "New password must be 8-128 chars, include upper & lower case, number and a special character"
+        })
 });
 
 // Middlewares للتحقق
@@ -109,7 +145,29 @@ const validateLogin = (req, res, next) => {
     next();
 };
 
+const validateForgotPassword = (req, res, next) => {
+    const { error, value } = forgotPasswordSchema.validate(req.body, options);
+    if (error) {
+        const errorsList = error.details.map((detail) => detail.message);
+        return res.status(400).json({ status: "fail", errors: errorsList });
+    }
+    req.body = value;
+    next();
+};
+
+const validateResetPassword = (req, res, next) => {
+    const { error, value } = resetPasswordSchema.validate(req.body, options);
+    if (error) {
+        const errorsList = error.details.map((detail) => detail.message);
+        return res.status(400).json({ status: "fail", errors: errorsList });
+    }
+    req.body = value;
+    next();
+};
+
 module.exports = {
     validateRegister,
-    validateLogin
+    validateLogin,
+    validateForgotPassword,
+    validateResetPassword
 };

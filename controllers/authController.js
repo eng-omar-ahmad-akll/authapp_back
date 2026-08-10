@@ -20,15 +20,17 @@ const register = asyncHandler(async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // إجبار الـ role على "user" برمجياً لحظر الـ Mass Assignment
     const user = await User.create({
         first_name,
         last_name,
         email,
         password: hashedPassword,
+        role: "user"
     });
 
     const accessToken = jwt.sign(
-        { UserInfo: { id: user._id } },
+        { UserInfo: { id: user._id, role: user.role } },
         process.env.ACCESS_TOKEN_SECRET,
         { expiresIn: "15m" }
     );
@@ -51,16 +53,14 @@ const register = asyncHandler(async (req, res) => {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
+        role: user.role
     });
 });
 
 // 2. Login User
 const login = asyncHandler(async (req, res) => {
-    console.log("RECEIVED BODY AT LOGIN:", req.body);
-
     const { email, password } = req.body;
     
-    // استخراج دقيق ومرن لحقل كود الـ 2FA بغض النظر عن اسمه في الـ Payload
     const rawCode = req.body?.twoFactorCode || req.body?.code || req.body?.token || req.body?.totpCode;
 
     if (!email || !password) {
@@ -104,8 +104,9 @@ const login = asyncHandler(async (req, res) => {
         }
     }
 
+    // تضمين الـ role داخل الـ Access Token
     const accessToken = jwt.sign(
-        { UserInfo: { id: foundUser._id } },
+        { UserInfo: { id: foundUser._id, role: foundUser.role } },
         process.env.ACCESS_TOKEN_SECRET,
         { expiresIn: "15m" }
     );
@@ -126,10 +127,11 @@ const login = asyncHandler(async (req, res) => {
     return res.status(200).json({
         accessToken,
         email: foundUser.email,
+        role: foundUser.role
     });
 });
 
-// 3. Refresh Access Token (معدل بدون nested async callback)
+// 3. Refresh Access Token (تعديل إضافة الـ role للـ Token الجديد)
 const refresh = asyncHandler(async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) {
@@ -153,8 +155,9 @@ const refresh = asyncHandler(async (req, res) => {
         throw new Error("Unauthorized - User Not Found");
     }
 
+    // هنا تعديل مهم جداً: تضمين الـ role في الـ Access Token الجديد
     const accessToken = jwt.sign(
-        { UserInfo: { id: foundUser._id } },
+        { UserInfo: { id: foundUser._id, role: foundUser.role } },
         process.env.ACCESS_TOKEN_SECRET,
         { expiresIn: "15m" }
     );

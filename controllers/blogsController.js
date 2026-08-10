@@ -2,9 +2,9 @@ const mongoose = require("mongoose");
 const Blog = require("../models/Blog");
 const { asyncHandler } = require("../middleware/errorHandler");
 
-// استخراج الـ ID بأمان من التوكين الممرر في Request
+// استخراج الـ ID بأمان من التوكين
 const getUserIdFromReq = (req) => {
-    return req.user?.id || req.user?._id;
+    return req.user?.id || req.user?._id || req.user;
 };
 
 // 1. Get All Blogs (Public)
@@ -24,7 +24,6 @@ const getAllBlogs = asyncHandler(async (req, res) => {
 const getBlogById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    // التحقق من صحة صيغة Mongoose ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400);
         throw new Error("Invalid Blog ID format");
@@ -66,37 +65,19 @@ const createBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. Update Blog (Protected - Owner Only)
+// 4. Update Blog (Protected - Owner or Admin)
+// تمت الاستفادة من req.blog القادم من الـ verifyBlogOwnership middleware
 const updateBlog = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-        res.status(400);
-        throw new Error("Invalid Blog ID format");
-    }
-
-    const blog = await Blog.findById(id);
-
-    if (!blog) {
-        res.status(404);
-        throw new Error("Blog not found");
-    }
-
-    const userId = getUserIdFromReq(req);
-
-    // التحقق من أن المستخدم الحالي هو صاحب المقال
-    if (blog.author.toString() !== userId?.toString()) {
-        res.status(403);
-        throw new Error("Unauthorized to update this blog");
-    }
+    const blog = req.blog; // المقال مفحوص ومحضر جاهز من الميدلوير
 
     const { title, content, tags } = req.body;
 
-    const updatedBlog = await Blog.findByIdAndUpdate(
-        id,
-        { title, content, tags },
-        { new: true, runValidators: true }
-    );
+    // تحديث الحقول المسموح بها فقط بمنع Mass Assignment لتغيير الـ author
+    if (title !== undefined) blog.title = title;
+    if (content !== undefined) blog.content = content;
+    if (tags !== undefined) blog.tags = tags;
+
+    const updatedBlog = await blog.save();
 
     return res.status(200).json({
         status: "success",
@@ -104,28 +85,10 @@ const updateBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. Delete Blog (Protected - Owner Only)
+// 5. Delete Blog (Protected - Owner or Admin)
+// تمت الاستفادة من req.blog القادم من الـ verifyBlogOwnership middleware
 const deleteBlog = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-        res.status(400);
-        throw new Error("Invalid Blog ID format");
-    }
-
-    const blog = await Blog.findById(id);
-
-    if (!blog) {
-        res.status(404);
-        throw new Error("Blog not found");
-    }
-
-    const userId = getUserIdFromReq(req);
-
-    if (blog.author.toString() !== userId?.toString()) {
-        res.status(403);
-        throw new Error("Unauthorized to delete this blog");
-    }
+    const blog = req.blog; // المقال مفحوص ومحضر جاهز من الميدلوير
 
     await blog.deleteOne();
 

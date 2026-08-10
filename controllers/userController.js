@@ -2,9 +2,9 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const { asyncHandler } = require("../middleware/errorHandler");
 
-// 1. Get All Users (لا يرجع كلمة السر)
+// 1. Get All Users (استبعاد كلمة السر وسر الـ 2FA)
 const getallusers = asyncHandler(async (req, res) => {
-    const users = await User.find().select("-password").lean();
+    const users = await User.find().select("-password -twoFactorSecret").lean();
 
     return res.status(200).json({
         status: "success",
@@ -13,7 +13,7 @@ const getallusers = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Get User By ID
+// 2. Get User By ID (استبعاد كلمة السر وسر الـ 2FA)
 const getUserById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -22,7 +22,7 @@ const getUserById = asyncHandler(async (req, res) => {
         throw new Error("Invalid User ID format");
     }
 
-    const user = await User.findById(id).select("-password").lean();
+    const user = await User.findById(id).select("-password -twoFactorSecret").lean();
 
     if (!user) {
         res.status(404);
@@ -44,13 +44,26 @@ const updateUser = asyncHandler(async (req, res) => {
         throw new Error("Invalid User ID format");
     }
 
-    const { first_name, last_name, email } = req.body;
+    // السماح بتحديث حقول محددة فقط (منع Mass Assignment)
+    const allowedUpdates = {};
+    if (req.body.first_name) allowedUpdates.first_name = req.body.first_name;
+    if (req.body.last_name) allowedUpdates.last_name = req.body.last_name;
+    
+    // فحص الإيميل إذا كان يتحدث لمنع تكراره بـ Error نضيف
+    if (req.body.email) {
+        const emailExists = await User.findOne({ email: req.body.email, _id: { $ne: id } });
+        if (emailExists) {
+            res.status(409);
+            throw new Error("Email address is already in use by another account");
+        }
+        allowedUpdates.email = req.body.email;
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
         id,
-        { first_name, last_name, email },
+        allowedUpdates,
         { new: true, runValidators: true }
-    ).select("-password");
+    ).select("-password -twoFactorSecret");
 
     if (!updatedUser) {
         res.status(404);

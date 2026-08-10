@@ -5,24 +5,29 @@ const mongoose = require("mongoose");
 const mongoSanitize = require("express-mongo-sanitize");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const helmet = require("helmet");
 const path = require("path");
 
 const connectDB = require("./config/dbconnect");
 const corsOptions = require("./config/coresoption");
 const { globalErrorHandler } = require("./middleware/errorHandler");
+const { apiLimiter } = require("./middleware/rateLimiters");
 
 const app = express();
 
 // Connect to Database
 connectDB();
 
-// 1. Core Parsers
+// 1. Security HTTP Headers (OWASP Recommended)
+app.use(helmet());
+
+// 2. Core Parsers with Body Size Limits (Mitigates DoS Payload Attacks)
 app.use(cors(corsOptions));
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
-// 2. Safe Sanitization (تطبيق التنظيف على الكائنات مباشرة لتفادي خطأ Vercel)
+// 3. Safe NoSQL Injection Sanitization
 app.use((req, res, next) => {
     if (req.body) mongoSanitize.sanitize(req.body);
     if (req.params) mongoSanitize.sanitize(req.params);
@@ -30,35 +35,46 @@ app.use((req, res, next) => {
     next();
 });
 
-// 3. Static Files
+// 4. Rate Limiting على مستوى جميع طلبات الـ API
+app.use("/api", apiLimiter);
+
+// 5. Static Files
 app.use(express.static(path.join(__dirname, "public")));
 
-// 4. Routes
+// 6. Routes Setup
 app.use("/", require("./routes/root"));
 app.use("/auth", require("./routes/authRoutes"));
 app.use("/users", require("./routes/usersRoute"));
 app.use("/blogs", require("./routes/blogRoutes"));
 
-// 5. Safe 404 Handler
+// 7. Safe 404 Handler
 app.use((req, res) => {
     res.status(404);
     if (req.accepts("html")) {
         res.sendFile(path.join(__dirname, "views", "404.html"));
     } else if (req.accepts("json")) {
-        res.json({ message: "404 Not Found" });
+        res.json({ status: "fail", message: "404 Not Found" });
     } else {
         res.type("txt").send("404 Not Found");
     }
 });
 
-// 6. Global Error Handler
+// 8. Global Error Handler Middleware
 app.use(globalErrorHandler);
 
+// مراقبة اتصال قاعدة البيانات قبل تشغيل السيرفر في بيئة المحلي (Development)
 const PORT = process.env.PORT || 5000;
 
 if (process.env.NODE_ENV !== "production") {
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
+    mongoose.connection.once("open", () => {
+        console.log("Connected to MongoDB");
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    });
+
+    mongoose.connection.on("error", (err) => {
+        console.error("MongoDB connection error:", err);
     });
 }
 
