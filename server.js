@@ -16,14 +16,19 @@ const app = express();
 // Connect to Database
 connectDB();
 
-// 1. Core Parsers (تحليل الـ Body أولاً)
+// 1. Core Parsers
 app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 2. Sanitization Middleware (تطبيق الحماية بشكل مباشر آمن)
-app.use(mongoSanitize());
+// 2. Safe Sanitization (تطبيق التنظيف على الكائنات مباشرة لتفادي خطأ Vercel)
+app.use((req, res, next) => {
+    if (req.body) mongoSanitize.sanitize(req.body);
+    if (req.params) mongoSanitize.sanitize(req.params);
+    if (req.query) mongoSanitize.sanitize(req.query);
+    next();
+});
 
 // 3. Static Files
 app.use(express.static(path.join(__dirname, "public")));
