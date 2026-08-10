@@ -54,7 +54,7 @@ const register = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Login User (محدث ليدعم التحقق من الـ 2FA)
+// 2. Login User (محدث ليدعم التحقق من الـ 2FA مع معالجة الصفر وفارق الوقت)
 const login = asyncHandler(async (req, res) => {
     const { email, password, twoFactorCode } = req.body;
 
@@ -79,10 +79,13 @@ const login = asyncHandler(async (req, res) => {
             });
         }
 
+        const cleanToken = String(twoFactorCode).trim();
+
         const verified = speakeasy.totp.verify({
             secret: foundUser.twoFactorSecret,
             encoding: "base32",
-            token: twoFactorCode
+            token: cleanToken,
+            window: 1
         });
 
         if (!verified) {
