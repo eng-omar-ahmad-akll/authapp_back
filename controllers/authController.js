@@ -60,7 +60,7 @@ const login = asyncHandler(async (req, res) => {
 
     const { email, password } = req.body;
     
-    // استخراج الكود بمرونة بغض النظر عن طريقة تسميته
+    // استخراج دقيق ومرن لحقل كود الـ 2FA بغض النظر عن اسمه في الـ Payload
     const rawCode = req.body?.twoFactorCode || req.body?.code || req.body?.token || req.body?.totpCode;
 
     if (!email || !password) {
@@ -80,7 +80,7 @@ const login = asyncHandler(async (req, res) => {
         throw new Error("Invalid email or password");
     }
 
-    // التحقق من تفعيل 2FA للمستخدم
+    // التحقق من 2FA
     if (foundUser.isTwoFactorEnabled) {
         if (rawCode === undefined || rawCode === null || String(rawCode).trim() === "") {
             return res.status(403).json({
@@ -95,7 +95,7 @@ const login = asyncHandler(async (req, res) => {
             secret: foundUser.twoFactorSecret,
             encoding: "base32",
             token: cleanToken,
-            window: 2 // يسمح بفارق توقيت قدره 60 ثانية قبلاً أو بعداً
+            window: 2
         });
 
         if (!verified) {
@@ -129,7 +129,7 @@ const login = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Refresh Access Token
+// 3. Refresh Access Token (معدل بدون nested async callback)
 const refresh = asyncHandler(async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) {
@@ -139,26 +139,27 @@ const refresh = asyncHandler(async (req, res) => {
 
     const refreshToken = cookies.jwt;
 
-    jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, asyncHandler(async (err, decoded) => {
-        if (err) {
-            res.status(403);
-            throw new Error("Forbidden - Invalid Refresh Token");
-        }
+    let decoded;
+    try {
+        decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    } catch (err) {
+        res.status(403);
+        throw new Error("Forbidden - Invalid Refresh Token");
+    }
 
-        const foundUser = await User.findById(decoded.UserInfo.id).exec();
-        if (!foundUser) {
-            res.status(401);
-            throw new Error("Unauthorized - User Not Found");
-        }
+    const foundUser = await User.findById(decoded.UserInfo.id).exec();
+    if (!foundUser) {
+        res.status(401);
+        throw new Error("Unauthorized - User Not Found");
+    }
 
-        const accessToken = jwt.sign(
-            { UserInfo: { id: foundUser._id } },
-            process.env.ACCESS_TOKEN_SECRET,
-            { expiresIn: "15m" }
-        );
+    const accessToken = jwt.sign(
+        { UserInfo: { id: foundUser._id } },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: "15m" }
+    );
 
-        return res.json({ accessToken });
-    }));
+    return res.json({ accessToken });
 });
 
 // 4. Logout User
