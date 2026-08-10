@@ -54,9 +54,11 @@ const register = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Login User (محدث ليدعم التحقق من الـ 2FA مع معالجة الصفر وفارق الوقت)
+// 2. Login User
 const login = asyncHandler(async (req, res) => {
-    const { email, password, twoFactorCode } = req.body;
+    const { email, password } = req.body;
+    // استلام الكود بأي مسمى ممكن
+    const rawCode = req.body.twoFactorCode || req.body.code || req.body.token || req.body.totpCode;
 
     const foundUser = await User.findOne({ email }).exec();
     if (!foundUser) {
@@ -72,20 +74,20 @@ const login = asyncHandler(async (req, res) => {
 
     // التحقق من تفعيل 2FA للمستخدم
     if (foundUser.isTwoFactorEnabled) {
-        if (!twoFactorCode) {
+        if (!rawCode) {
             return res.status(403).json({
                 message: "2FA code required",
                 require2FA: true
             });
         }
 
-        const cleanToken = String(twoFactorCode).trim();
+        const cleanToken = String(rawCode).trim();
 
         const verified = speakeasy.totp.verify({
             secret: foundUser.twoFactorSecret,
             encoding: "base32",
             token: cleanToken,
-            window: 1
+            window: 1 // معالجة فروق التوقيت حتى 30 ثانية قبل أو بعد
         });
 
         if (!verified) {
@@ -236,9 +238,8 @@ const resetPassword = asyncHandler(async (req, res) => {
     });
 });
 
-// 7. Setup 2FA (توليد QR Code)
+// 7. Setup 2FA
 const setup2FA = asyncHandler(async (req, res) => {
-    // استخراج id من req.user المصنوع بواسطة verifyjwt
     const userId = req.user.id || req.user;
 
     const user = await User.findById(userId);
@@ -263,13 +264,12 @@ const setup2FA = asyncHandler(async (req, res) => {
     });
 });
 
-// 8. Verify & Enable 2FA (تأكيد كود التفعيل لأول مرة)
+// 8. Verify & Enable 2FA
 const verify2FA = asyncHandler(async (req, res) => {
-    const { token } = req.body;
-    // استخراج id من req.user المصنوع بواسطة verifyjwt
+    const rawToken = req.body.token || req.body.twoFactorCode || req.body.code;
     const userId = req.user.id || req.user;
 
-    if (!token) {
+    if (!rawToken) {
         res.status(400);
         throw new Error("2FA Token is required");
     }
@@ -280,10 +280,13 @@ const verify2FA = asyncHandler(async (req, res) => {
         throw new Error("Please setup 2FA first");
     }
 
+    const cleanToken = String(rawToken).trim();
+
     const verified = speakeasy.totp.verify({
         secret: user.twoFactorSecret,
         encoding: "base32",
-        token: token
+        token: cleanToken,
+        window: 1
     });
 
     if (!verified) {
