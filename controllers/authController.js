@@ -1,5 +1,7 @@
-const User = require("../models/User");
 const bcrypt = require("bcrypt");
+const User = require("../models/User");
+const OTP = require("../models/OTP");
+const sendEmail = require("../config/sendEmail");
 const jwt = require("jsonwebtoken");
 const { asyncHandler } = require("../middleware/errorHandler");
 
@@ -138,9 +140,80 @@ const logout = asyncHandler(async (req, res) => {
     return res.status(200).json({ message: "Cookie cleared successfully" });
 });
 
+// 5. Forgot Password - إرسال رمز OTP
+const forgotPassword = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+
+    if (!email) {
+        res.status(400);
+        throw new Error("Email is required");
+    }
+
+    const user = await User.findOne({ email }).exec();
+    if (!user) {
+        res.status(404);
+        throw new Error("User with this email does not exist");
+    }
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = await bcrypt.hash(otpCode, 10);
+
+    await OTP.deleteMany({ email });
+    await OTP.create({ email, otp: hashedOtp });
+
+    await sendEmail({
+        email: user.email,
+        subject: "Password Reset OTP Code",
+        message: `Your password reset code is: ${otpCode}. It is valid for 10 minutes.`
+    });
+
+    return res.status(200).json({
+        message: "OTP code sent to your email successfully"
+    });
+});
+
+// 6. Reset Password - إعادة ضبط كلمة السر
+const resetPassword = asyncHandler(async (req, res) => {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+        res.status(400);
+        throw new Error("Email, OTP, and new password are required");
+    }
+
+    const otpRecord = await OTP.findOne({ email });
+    if (!otpRecord) {
+        res.status(400);
+        throw new Error("Invalid or expired OTP code");
+    }
+
+    const isValidOtp = await bcrypt.compare(otp, otpRecord.otp);
+    if (!isValidOtp) {
+        res.status(400);
+        throw new Error("Invalid OTP code");
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+        res.status(404);
+        throw new Error("User not found");
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    await OTP.deleteOne({ _id: otpRecord._id });
+
+    return res.status(200).json({
+        message: "Password reset successfully"
+    });
+});
+
 module.exports = {
     register,
     login,
     refresh,
     logout,
+    forgotPassword,
+    resetPassword
 };
