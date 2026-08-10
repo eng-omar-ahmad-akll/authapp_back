@@ -1,17 +1,17 @@
 const Joi = require("joi");
 
-// Pattern to block NoSQL injection chars ($) and HTML/Script tags (<, >, {, }, \)
+// النمط المخصص لمنع رموز الـ NoSQL Injection و أقواس XSS
 const safeStringPattern = /^[^$<>{}\\]*$/;
 
-// OWASP Regex for strong password: min 8, 1 upper, 1 lower, 1 digit, 1 special char
-const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._-]).{8,128}$/;
+// OWASP Pattern لكلمات المرور القوية (8-128 حرف، حرف كبير، حرف صغير، رقم، ورمز خاص)
+const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._\--]).{8,128}$/;
 
 const options = {
-    abortEarly: false,
-    stripUnknown: true // OWASP Protection: Mass Assignment Mitigation
+    abortEarly: false,     // إرجاع جميع أخطاء المدخلات دفعة واحدة
+    stripUnknown: true     // OWASP Mitigation: حظر ومنع الحقول الغريبة (Mass Assignment)
 };
 
-// 1. Protected Register Schema
+// 1. Schema تسجيل حساب جديد
 const registerSchema = Joi.object({
     first_name: Joi.string()
         .trim()
@@ -22,7 +22,8 @@ const registerSchema = Joi.object({
         .messages({
             "string.pattern.base": "First name contains forbidden special characters",
             "string.empty": "First name is required",
-            "string.min": "First name must be at least 2 characters long"
+            "string.min": "First name must be at least 2 characters long",
+            "string.max": "First name cannot exceed 30 characters"
         }),
 
     last_name: Joi.string()
@@ -34,7 +35,8 @@ const registerSchema = Joi.object({
         .messages({
             "string.pattern.base": "Last name contains forbidden special characters",
             "string.empty": "Last name is required",
-            "string.min": "Last name must be at least 2 characters long"
+            "string.min": "Last name must be at least 2 characters long",
+            "string.max": "Last name cannot exceed 30 characters"
         }),
 
     email: Joi.string()
@@ -52,12 +54,12 @@ const registerSchema = Joi.object({
         .required()
         .pattern(strongPasswordPattern)
         .messages({
-            "string.pattern.base": "Password must include uppercase, lowercase, number and special character (@$!%*?&#._-)",
+            "string.pattern.base": "Password must be 8-128 chars, include upper & lower case, number and a special character",
             "string.empty": "Password is required"
         })
 });
 
-// 2. Protected Login Schema
+// 2. Schema تسجيل الدخول
 const loginSchema = Joi.object({
     email: Joi.string()
         .email({ tlds: { allow: false } })
@@ -76,7 +78,7 @@ const loginSchema = Joi.object({
         })
 });
 
-// Middlewares
+// Middlewares للتحقق
 const validateRegister = (req, res, next) => {
     const { error, value } = registerSchema.validate(req.body, options);
     
@@ -85,7 +87,7 @@ const validateRegister = (req, res, next) => {
         return res.status(400).json({ status: "fail", errors: errorsList });
     }
     
-    req.body = value;
+    req.body = value; // إسناد البيانات المعالجة والنظيفة
     next();
 };
 

@@ -1,161 +1,139 @@
+const mongoose = require("mongoose");
 const Blog = require("../models/Blog");
+const { asyncHandler } = require("../middleware/errorHandler");
 
-// دالة مساعدة موحدة لاستخراج الـ ID الخاص بالـ User من الـ Token
+// استخراج الـ ID بأمان من التوكين الممرر في Request
 const getUserIdFromReq = (req) => {
-    return req.user?.UserInfo?.id || req.user?.id || req.user?._id;
+    return req.user?.id || req.user?._id;
 };
 
 // 1. Get All Blogs (Public)
-const getAllBlogs = async (req, res) => {
-    try {
-        const blogs = await Blog.find()
-            .populate("author", "first_name last_name email")
-            .sort({ createdAt: -1 });
-            
-        return res.status(200).json({
-            status: "success",
-            count: blogs.length,
-            data: blogs
-        });
-    } catch (err) {
-        return res.status(500).json({
-            status: "error",
-            message: err.message || "Server error fetching blogs"
-        });
-    }
-};
+const getAllBlogs = asyncHandler(async (req, res) => {
+    const blogs = await Blog.find()
+        .populate("author", "first_name last_name email")
+        .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+        status: "success",
+        count: blogs.length,
+        data: blogs
+    });
+});
 
 // 2. Get Single Blog (Public)
-const getBlogById = async (req, res) => {
-    try {
-        const blog = await Blog.findById(req.params.id).populate("author", "first_name last_name email");
-        
-        if (!blog) {
-            return res.status(404).json({
-                status: "fail",
-                message: "Blog not found"
-            });
-        }
-        
-        return res.status(200).json({
-            status: "success",
-            data: blog
-        });
-    } catch (err) {
-        return res.status(400).json({
-            status: "fail",
-            message: "Invalid Blog ID format"
-        });
+const getBlogById = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    // التحقق من صحة صيغة Mongoose ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400);
+        throw new Error("Invalid Blog ID format");
     }
-};
+
+    const blog = await Blog.findById(id).populate("author", "first_name last_name email");
+
+    if (!blog) {
+        res.status(404);
+        throw new Error("Blog not found");
+    }
+
+    return res.status(200).json({
+        status: "success",
+        data: blog
+    });
+});
 
 // 3. Create Blog (Protected)
-const createBlog = async (req, res) => {
-    try {
-        const { title, content, tags } = req.body;
-        const userId = getUserIdFromReq(req);
+const createBlog = asyncHandler(async (req, res) => {
+    const { title, content, tags } = req.body;
+    const userId = getUserIdFromReq(req);
 
-        if (!userId) {
-            return res.status(401).json({
-                status: "fail",
-                message: "User ID not found in token"
-            });
-        }
-
-        const newBlog = await Blog.create({
-            title,
-            content,
-            tags,
-            author: userId
-        });
-
-        return res.status(201).json({
-            status: "success",
-            data: newBlog
-        });
-    } catch (err) {
-        return res.status(500).json({
-            status: "error",
-            message: err.message
-        });
+    if (!userId) {
+        res.status(401);
+        throw new Error("User authentication required");
     }
-};
+
+    const newBlog = await Blog.create({
+        title,
+        content,
+        tags,
+        author: userId
+    });
+
+    return res.status(201).json({
+        status: "success",
+        data: newBlog
+    });
+});
 
 // 4. Update Blog (Protected - Owner Only)
-const updateBlog = async (req, res) => {
-    try {
-        const blog = await Blog.findById(req.params.id);
-        
-        if (!blog) {
-            return res.status(404).json({
-                status: "fail",
-                message: "Blog not found"
-            });
-        }
+const updateBlog = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        const userId = getUserIdFromReq(req);
-
-        // التحقق من الملكية
-        if (blog.author.toString() !== userId?.toString()) {
-            return res.status(403).json({
-                status: "fail",
-                message: "Unauthorized to update this blog"
-            });
-        }
-
-        const updatedBlog = await Blog.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true, runValidators: true }
-        );
-
-        return res.status(200).json({
-            status: "success",
-            data: updatedBlog
-        });
-    } catch (err) {
-        return res.status(500).json({
-            status: "error",
-            message: err.message
-        });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400);
+        throw new Error("Invalid Blog ID format");
     }
-};
+
+    const blog = await Blog.findById(id);
+
+    if (!blog) {
+        res.status(404);
+        throw new Error("Blog not found");
+    }
+
+    const userId = getUserIdFromReq(req);
+
+    // التحقق من أن المستخدم الحالي هو صاحب المقال
+    if (blog.author.toString() !== userId?.toString()) {
+        res.status(403);
+        throw new Error("Unauthorized to update this blog");
+    }
+
+    const { title, content, tags } = req.body;
+
+    const updatedBlog = await Blog.findByIdAndUpdate(
+        id,
+        { title, content, tags },
+        { new: true, runValidators: true }
+    );
+
+    return res.status(200).json({
+        status: "success",
+        data: updatedBlog
+    });
+});
 
 // 5. Delete Blog (Protected - Owner Only)
-const deleteBlog = async (req, res) => {
-    try {
-        const blog = await Blog.findById(req.params.id);
-        
-        if (!blog) {
-            return res.status(404).json({
-                status: "fail",
-                message: "Blog not found"
-            });
-        }
+const deleteBlog = asyncHandler(async (req, res) => {
+    const { id } = req.params;
 
-        const userId = getUserIdFromReq(req);
-
-        // التحقق من الملكية
-        if (blog.author.toString() !== userId?.toString()) {
-            return res.status(403).json({
-                status: "fail",
-                message: "Unauthorized to delete this blog"
-            });
-        }
-
-        await blog.deleteOne();
-
-        return res.status(200).json({
-            status: "success",
-            message: "Blog deleted successfully"
-        });
-    } catch (err) {
-        return res.status(500).json({
-            status: "error",
-            message: err.message
-        });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400);
+        throw new Error("Invalid Blog ID format");
     }
-};
+
+    const blog = await Blog.findById(id);
+
+    if (!blog) {
+        res.status(404);
+        throw new Error("Blog not found");
+    }
+
+    const userId = getUserIdFromReq(req);
+
+    if (blog.author.toString() !== userId?.toString()) {
+        res.status(403);
+        throw new Error("Unauthorized to delete this blog");
+    }
+
+    await blog.deleteOne();
+
+    return res.status(200).json({
+        status: "success",
+        message: "Blog deleted successfully"
+    });
+});
 
 module.exports = {
     getAllBlogs,

@@ -1,14 +1,15 @@
 const express = require("express");
 const router = express.Router();
+
 const blogsController = require("../controllers/blogsController");
 const verifyJWT = require("../middleware/verifyJWT");
 const { validateCreateBlog, validateUpdateBlog } = require("../middleware/blogValidation");
 
-// Public Routes (مفتوحة لأي حد)
+// Public Routes
 router.get("/", blogsController.getAllBlogs);
 router.get("/:id", blogsController.getBlogById);
 
-// Protected Routes (تتطلب Bearer Token)
+// Protected Routes
 router.use(verifyJWT);
 
 router.post("/", validateCreateBlog, blogsController.createBlog);

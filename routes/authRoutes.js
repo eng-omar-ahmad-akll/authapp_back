@@ -1,15 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const authcontroller = require("../controllers/authcontroller");
 
-// استدعاء الـ Validations الجدد من فولدر middleware
+const authController = require("../controllers/authController");
 const { validateRegister, validateLogin } = require("../middleware/authValidation");
 
-// ربط الـ Validation بالـ Routes
-router.route("/register").post(validateRegister, authcontroller.register);
-router.route("/login").post(validateLogin, authcontroller.login);
-
-router.route("/refresh").get(authcontroller.refresh);
-router.route("/logout").post(authcontroller.logout);
+router.route("/register").post(validateRegister, authController.register);
+router.route("/login").post(validateLogin, authController.login);
+router.route("/refresh").get(authController.refresh);
+router.route("/logout").post(authController.logout);
 
 module.exports = router;
