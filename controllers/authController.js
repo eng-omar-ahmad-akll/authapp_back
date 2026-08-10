@@ -235,7 +235,8 @@ const resetPassword = asyncHandler(async (req, res) => {
 
 // 7. Setup 2FA (توليد QR Code)
 const setup2FA = asyncHandler(async (req, res) => {
-    const userId = req.user; // يفترض أن verifyJWT يمرر req.user
+    // استخراج id من req.user المصنوع بواسطة verifyjwt
+    const userId = req.user.id || req.user;
 
     const user = await User.findById(userId);
     if (!user) {
@@ -262,7 +263,8 @@ const setup2FA = asyncHandler(async (req, res) => {
 // 8. Verify & Enable 2FA (تأكيد كود التفعيل لأول مرة)
 const verify2FA = asyncHandler(async (req, res) => {
     const { token } = req.body;
-    const userId = req.user;
+    // استخراج id من req.user المصنوع بواسطة verifyjwt
+    const userId = req.user.id || req.user;
 
     if (!token) {
         res.status(400);
