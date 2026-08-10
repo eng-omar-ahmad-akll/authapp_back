@@ -8,7 +8,7 @@ const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._\-
 
 const options = {
     abortEarly: false,     // إرجاع جميع أخطاء المدخلات دفعة واحدة
-    stripUnknown: true     // OWASP Mitigation: حظر ومنع الحقول الغريبة (Mass Assignment)
+    stripUnknown: true     // يحظر الحقول غير المعرفة
 };
 
 // 1. Schema تسجيل حساب جديد
@@ -59,7 +59,7 @@ const registerSchema = Joi.object({
         })
 });
 
-// 2. Schema تسجيل الدخول
+// 2. Schema تسجيل الدخول (تمت إضافة حقول 2FA)
 const loginSchema = Joi.object({
     email: Joi.string()
         .email({ tlds: { allow: false } })
@@ -75,7 +75,13 @@ const loginSchema = Joi.object({
         .required()
         .messages({
             "string.empty": "Password is required"
-        })
+        }),
+
+    // السماح بحقول الـ 2FA لمنع Joi من حذفها
+    twoFactorCode: Joi.string().trim().optional().allow("", null),
+    totpCode: Joi.string().trim().optional().allow("", null),
+    code: Joi.string().trim().optional().allow("", null),
+    token: Joi.string().trim().optional().allow("", null)
 });
 
 // Middlewares للتحقق
@@ -87,7 +93,7 @@ const validateRegister = (req, res, next) => {
         return res.status(400).json({ status: "fail", errors: errorsList });
     }
     
-    req.body = value; // إسناد البيانات المعالجة والنظيفة
+    req.body = value;
     next();
 };
 
