@@ -13,6 +13,9 @@ const { globalErrorHandler } = require("./middleware/errorHandler");
 
 const app = express();
 
+// Connect to Database
+connectDB();
+
 // 1. Sanitization Middleware
 app.use((req, res, next) => {
     if (req.body) mongoSanitize.sanitize(req.body);
@@ -21,34 +24,23 @@ app.use((req, res, next) => {
     next();
 });
 
-// 2. Database Connection Middleware
-app.use(async (req, res, next) => {
-    try {
-        await connectDB();
-        next();
-    } catch (err) {
-        console.error("Database Connection Error:", err);
-        res.status(500).json({ message: "Internal Server Error - DB Connection Failed" });
-    }
-});
-
-// 3. Middlewares
+// 2. Core Middlewares
 app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 4. Static Files
+// 3. Static Files
 app.use(express.static(path.join(__dirname, "public")));
 
-// 5. Routes (تم تعديل usersRoute بالـ R الكابيتال)
+// 4. Routes
 app.use("/", require("./routes/root"));
 app.use("/auth", require("./routes/authRoutes"));
 app.use("/users", require("./routes/usersRoute"));
 app.use("/blogs", require("./routes/blogRoutes"));
 
-// 6. 404 Handler
-app.all(/(.*)/, (req, res) => {
+// 5. Safe 404 Handler (متوافق تماماً بدون نصوص Regex قديمة)
+app.use((req, res) => {
     res.status(404);
     if (req.accepts("html")) {
         res.sendFile(path.join(__dirname, "views", "404.html"));
@@ -59,7 +51,7 @@ app.all(/(.*)/, (req, res) => {
     }
 });
 
-// 7. Global Error Handler
+// 6. Global Error Handler
 app.use(globalErrorHandler);
 
 const PORT = process.env.PORT || 5000;
