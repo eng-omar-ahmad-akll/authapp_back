@@ -1,8 +1,11 @@
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const speakeasy = require("speakeasy");
+const QRCode = require("qrcode");
+
 const User = require("../models/User");
 const OTP = require("../models/OTP");
 const sendEmail = require("../config/sendEmail");
-const jwt = require("jsonwebtoken");
 const { asyncHandler } = require("../middleware/errorHandler");
 
 // 1. Register User
@@ -51,9 +54,9 @@ const register = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Login User
+// 2. Login User (محدث ليدعم التحقق من الـ 2FA)
 const login = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, twoFactorCode } = req.body;
 
     const foundUser = await User.findOne({ email }).exec();
     if (!foundUser) {
@@ -65,6 +68,27 @@ const login = asyncHandler(async (req, res) => {
     if (!match) {
         res.status(401);
         throw new Error("Invalid email or password");
+    }
+
+    // التحقق من تفعيل 2FA للمستخدم
+    if (foundUser.isTwoFactorEnabled) {
+        if (!twoFactorCode) {
+            return res.status(403).json({
+                message: "2FA code required",
+                require2FA: true
+            });
+        }
+
+        const verified = speakeasy.totp.verify({
+            secret: foundUser.twoFactorSecret,
+            encoding: "base32",
+            token: twoFactorCode
+        });
+
+        if (!verified) {
+            res.status(400);
+            throw new Error("Invalid 2FA code");
+        }
     }
 
     const accessToken = jwt.sign(
@@ -140,7 +164,7 @@ const logout = asyncHandler(async (req, res) => {
     return res.status(200).json({ message: "Cookie cleared successfully" });
 });
 
-// 5. Forgot Password - إرسال رمز OTP
+// 5. Forgot Password
 const forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
 
@@ -172,7 +196,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     });
 });
 
-// 6. Reset Password - إعادة ضبط كلمة السر
+// 6. Reset Password
 const resetPassword = asyncHandler(async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
@@ -209,11 +233,74 @@ const resetPassword = asyncHandler(async (req, res) => {
     });
 });
 
+// 7. Setup 2FA (توليد QR Code)
+const setup2FA = asyncHandler(async (req, res) => {
+    const userId = req.user; // يفترض أن verifyJWT يمرر req.user
+
+    const user = await User.findById(userId);
+    if (!user) {
+        res.status(404);
+        throw new Error("User not found");
+    }
+
+    const secret = speakeasy.generateSecret({
+        name: `App (${user.email})`
+    });
+
+    user.twoFactorSecret = secret.base32;
+    await user.save();
+
+    const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
+
+    return res.status(200).json({
+        message: "Scan QR code or use secret key",
+        secret: secret.base32,
+        qrCode: qrCodeUrl
+    });
+});
+
+// 8. Verify & Enable 2FA (تأكيد كود التفعيل لأول مرة)
+const verify2FA = asyncHandler(async (req, res) => {
+    const { token } = req.body;
+    const userId = req.user;
+
+    if (!token) {
+        res.status(400);
+        throw new Error("2FA Token is required");
+    }
+
+    const user = await User.findById(userId);
+    if (!user || !user.twoFactorSecret) {
+        res.status(400);
+        throw new Error("Please setup 2FA first");
+    }
+
+    const verified = speakeasy.totp.verify({
+        secret: user.twoFactorSecret,
+        encoding: "base32",
+        token: token
+    });
+
+    if (!verified) {
+        res.status(400);
+        throw new Error("Invalid 2FA token");
+    }
+
+    user.isTwoFactorEnabled = true;
+    await user.save();
+
+    return res.status(200).json({
+        message: "Two-Factor Authentication enabled successfully"
+    });
+});
+
 module.exports = {
     register,
     login,
     refresh,
     logout,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    setup2FA,
+    verify2FA
 };
