@@ -36,7 +36,7 @@ const getAllBlogs = asyncHandler(async (req, res) => {
     // تنفيذ الاستعلامات بالتوازي لتخفيض زمن الاستجابة (Latency Optimization)
     const [blogs, total] = await Promise.all([
         Blog.find(query)
-            .populate("author", "first_name last_name email role")
+            .populate("author", "first_name last_name")
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
@@ -64,7 +64,7 @@ const getBlogById = asyncHandler(async (req, res) => {
     }
 
     const blog = await Blog.findById(id)
-        .populate("author", "first_name last_name email role")
+        .populate("author", "first_name last_name")
         .lean();
 
     if (!blog) {
