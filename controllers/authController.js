@@ -94,10 +94,12 @@ const login = asyncHandler(async (req, res) => {
         throw new Error("Invalid email or password");
     }
 
+    // إحكام التحقق من الـ 2FA ومنع إصدار التوكين عند غياب الكود
     if (foundUser.isTwoFactorEnabled) {
         if (rawCode === undefined || rawCode === null || String(rawCode).trim() === "") {
-            return res.status(403).json({
-                message: "2FA code required",
+            return res.status(401).json({
+                status: "fail",
+                message: "2FA code is required",
                 require2FA: true
             });
         }
@@ -112,7 +114,7 @@ const login = asyncHandler(async (req, res) => {
         });
 
         if (!verified) {
-            res.status(400);
+            res.status(401);
             throw new Error("Invalid 2FA code");
         }
     }
@@ -222,7 +224,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
         throw new Error("User with this email does not exist");
     }
 
-    // استخدام مولد أرقام عشوائي آمن مشفر (Cryptographically Secure Pseudo-Random Number Generator)
     const otpCode = crypto.randomInt(100000, 1000000).toString();
 
     await OTP.deleteMany({ email: cleanEmail });
@@ -295,7 +296,8 @@ const setup2FA = asyncHandler(async (req, res) => {
         name: `App (${user.email})`
     });
 
-    user.twoFactorSecret = secret.base32;
+    // استخدام حقل مؤقت حتى يتسنى التحقق منه أولاً لمنع تعطيل الحساب السليم
+    user.tempTwoFactorSecret = secret.base32;
     await user.save();
 
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
@@ -318,16 +320,17 @@ const verify2FA = asyncHandler(async (req, res) => {
         throw new Error("2FA Token is required");
     }
 
-    const user = await User.findById(userId).select("+twoFactorSecret");
-    if (!user || !user.twoFactorSecret) {
+    const user = await User.findById(userId).select("+twoFactorSecret +tempTwoFactorSecret");
+    if (!user || (!user.twoFactorSecret && !user.tempTwoFactorSecret)) {
         res.status(400);
         throw new Error("Please setup 2FA first");
     }
 
+    const activeSecret = user.tempTwoFactorSecret || user.twoFactorSecret;
     const cleanToken = String(rawToken).replace(/\s+/g, "").trim();
 
     const verified = speakeasy.totp.verify({
-        secret: user.twoFactorSecret,
+        secret: activeSecret,
         encoding: "base32",
         token: cleanToken,
         window: 1
@@ -338,6 +341,8 @@ const verify2FA = asyncHandler(async (req, res) => {
         throw new Error("Invalid 2FA token");
     }
 
+    user.twoFactorSecret = activeSecret;
+    user.tempTwoFactorSecret = undefined;
     user.isTwoFactorEnabled = true;
     await user.save();
 

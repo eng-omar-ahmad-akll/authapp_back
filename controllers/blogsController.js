@@ -1,9 +1,24 @@
 const mongoose = require("mongoose");
 const Blog = require("../models/Blog");
 const { asyncHandler } = require("../middleware/errorHandler");
+const sanitizeHtml = require("sanitize-html");
 
 const getUserIdFromReq = (req) => {
     return req.user?.id || req.user?._id || req.user;
+};
+
+// خيارات تطهير الـ HTML المسموح بها في المقالات
+const sanitizeOptions = {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+        "img", "h1", "h2", "h3", "u", "s", "code", "pre", "blockquote", "span"
+    ]),
+    allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        "*": ["class", "style"],
+        "a": ["href", "name", "target", "rel"],
+        "img": ["src", "srcset", "alt", "title", "width", "height", "loading"]
+    },
+    allowedSchemes: ["http", "https", "mailto", "data"]
 };
 
 // 1. Get All Blogs (مفتوح للجميع)
@@ -68,9 +83,12 @@ const createBlog = asyncHandler(async (req, res) => {
         throw new Error("User authentication required");
     }
 
+    // تطهير محتوى المقال لحماية النظام من Stored XSS
+    const cleanContent = content ? sanitizeHtml(content, sanitizeOptions) : content;
+
     const newBlog = await Blog.create({
         title,
-        content,
+        content: cleanContent,
         tags,
         author: userId
     });
@@ -87,7 +105,12 @@ const updateBlog = asyncHandler(async (req, res) => {
     const { title, content, tags } = req.body;
 
     if (title !== undefined) blog.title = title;
-    if (content !== undefined) blog.content = content;
+    
+    // تطهير المحتوى المحدث قبل الحفظ
+    if (content !== undefined) {
+        blog.content = sanitizeHtml(content, sanitizeOptions);
+    }
+
     if (tags !== undefined) blog.tags = tags;
 
     const updatedBlog = await blog.save();

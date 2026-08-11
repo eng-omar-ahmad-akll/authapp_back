@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
 const verifyJWT = (req, res, next) => {
     const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -9,18 +10,31 @@ const verifyJWT = (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
-    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, async (err, decoded) => {
         if (err) {
             return res.status(403).json({ status: "fail", message: "Forbidden - Invalid or Expired Token" });
         }
 
-        // توحيد الحقول لتسهيل استخدام req.user في كل السيرفر
-        req.user = {
-            id: decoded.UserInfo.id,
-            role: (decoded.UserInfo.role || "user").toLowerCase()
-        };
+        try {
+            // التحقق من وجود المستخدم وتاريخ تغيير كلمة المرور لإبطال التوكنات القديمة
+            const user = await User.findById(decoded.UserInfo.id).select("+passwordChangedAt");
+            if (!user) {
+                return res.status(401).json({ status: "fail", message: "Unauthorized - User no longer exists" });
+            }
 
-        next();
+            if (user.changedPasswordAfter && user.changedPasswordAfter(decoded.iat)) {
+                return res.status(401).json({ status: "fail", message: "Unauthorized - Password recently changed. Please log in again." });
+            }
+
+            req.user = {
+                id: user._id.toString(),
+                role: (user.role || "user").toLowerCase()
+            };
+
+            next();
+        } catch (dbErr) {
+            return res.status(500).json({ status: "error", message: "Internal Server Error during Authentication" });
+        }
     });
 };
 
