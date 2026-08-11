@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema(
             type: String,
             required: [true, "Last name is required"],
             trim: true,
-            minlength: [2, "First name must be at least 2 characters"],
+            minlength: [2, "Last name must be at least 2 characters"],
             maxlength: [30, "Last name cannot exceed 30 characters"]
         },
         email: {
@@ -34,6 +34,26 @@ const userSchema = new mongoose.Schema(
             type: String,
             enum: ["user", "author", "admin"],
             default: "user"
+        },
+        isActive: {
+            type: Boolean,
+            default: true,
+            select: false
+        },
+        refreshTokens: {
+            type: [String],
+            default: [],
+            select: false
+        },
+        loginAttempts: {
+            type: Number,
+            default: 0,
+            select: false
+        },
+        lockUntil: {
+            type: Date,
+            default: null,
+            select: false
         },
         twoFactorSecret: {
             type: String,
@@ -66,12 +86,20 @@ const userSchema = new mongoose.Schema(
                 delete ret.twoFactorSecret;
                 delete ret.tempTwoFactorSecret;
                 delete ret.passwordChangedAt;
+                delete ret.refreshTokens;
+                delete ret.loginAttempts;
+                delete ret.lockUntil;
+                delete ret.isActive;
                 delete ret.__v;
                 return ret;
             }
         }
     }
 );
+
+userSchema.virtual("isLocked").get(function () {
+    return !!(this.lockUntil && this.lockUntil > Date.now());
+});
 
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
@@ -100,6 +128,22 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
         return JWTTimestamp < changedTimestamp;
     }
     return false;
+};
+
+userSchema.methods.incLoginAttempts = async function () {
+    if (this.lockUntil && this.lockUntil < Date.now()) {
+        return await this.updateOne({
+            $set: { loginAttempts: 1 },
+            $unset: { lockUntil: 1 }
+        });
+    }
+
+    const updates = { $inc: { loginAttempts: 1 } };
+    if (this.loginAttempts + 1 >= 5 && !this.isLocked) {
+        updates.$set = { lockUntil: Date.now() + 15 * 60 * 1000 }; // قفل لمدة 15 دقيقة
+    }
+
+    return await this.updateOne(updates);
 };
 
 module.exports = mongoose.model("User", userSchema);

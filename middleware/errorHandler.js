@@ -1,37 +1,49 @@
+class AppError extends Error {
+    constructor(message, statusCode) {
+        super(message);
+        this.statusCode = statusCode;
+        this.isOperational = true;
+        Error.captureStackTrace(this, this.constructor);
+    }
+}
+
 const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
 
 const globalErrorHandler = (err, req, res, next) => {
-    let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-    
-    // إخفاء التفاصيل في بيئة الإنتاج لأخطاء السيرفر الداخلي
+    let statusCode = err.statusCode || (res.statusCode === 200 ? 500 : res.statusCode);
     const isDev = process.env.NODE_ENV === "development";
-    let message = (statusCode === 500 && !isDev)
-        ? "Internal Server Error"
-        : (err.message || "Internal Server Error");
+    let isOperational = err.isOperational || false;
+    let message = "Internal Server Error";
 
     if (err.name === "CastError") {
         statusCode = 400;
         message = `Invalid resource identifier format: ${err.path}`;
-    }
-
-    if (err.code === 11000) {
+        isOperational = true;
+    } else if (err.code === 11000) {
         statusCode = 409;
         const field = Object.keys(err.keyValue || {})[0] || "field";
         message = `Duplicate field value entered for: ${field}`;
-    }
-
-    if (err.name === "ValidationError") {
+        isOperational = true;
+    } else if (err.name === "ValidationError") {
         statusCode = 400;
         message = Object.values(err.errors).map(val => val.message).join(", ");
+        isOperational = true;
+    }
+
+    if (!isOperational && !isDev) {
+        statusCode = 500;
+        message = "Internal Server Error";
+    } else {
+        message = err.message || message;
     }
 
     return res.status(statusCode).json({
-        status: "error",
+        status: statusCode >= 500 ? "error" : "fail",
         message,
         ...(isDev && { stack: err.stack })
     });
 };
 
-module.exports = { asyncHandler, globalErrorHandler };
+module.exports = { AppError, asyncHandler, globalErrorHandler };

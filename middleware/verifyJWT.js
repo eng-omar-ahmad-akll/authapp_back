@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { isTokenBlacklisted } = require("../utils/tokenBlacklist");
 
 const verifyJWT = (req, res, next) => {
     const authHeader = req.headers.authorization || req.headers.Authorization;
@@ -16,9 +17,18 @@ const verifyJWT = (req, res, next) => {
         }
 
         try {
-            const user = await User.findById(decoded.UserInfo.id).select("+passwordChangedAt");
+            if (await isTokenBlacklisted(token)) {
+                return res.status(401).json({ status: "fail", message: "Unauthorized - Token has been revoked" });
+            }
+
+            const user = await User.findById(decoded.UserInfo.id).select("+passwordChangedAt +isActive");
+            
             if (!user) {
                 return res.status(401).json({ status: "fail", message: "Unauthorized - User no longer exists" });
+            }
+
+            if (user.isActive === false) {
+                return res.status(401).json({ status: "fail", message: "Unauthorized - Account deactivated or banned" });
             }
 
             if (user.changedPasswordAfter && user.changedPasswordAfter(decoded.iat)) {

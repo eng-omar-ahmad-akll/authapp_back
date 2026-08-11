@@ -11,7 +11,7 @@ const getUserIdFromReq = (req) => {
 // 1. Get All Users (Admin Only)
 const getAllUsers = asyncHandler(async (req, res) => {
     const users = await User.find()
-        .select("-password -twoFactorSecret -tempTwoFactorSecret")
+        .select("-password -twoFactorSecret -tempTwoFactorSecret -refreshTokens")
         .lean();
 
     return res.status(200).json({
@@ -31,7 +31,7 @@ const getUserById = asyncHandler(async (req, res) => {
     }
 
     const user = await User.findById(id)
-        .select("-password -twoFactorSecret -tempTwoFactorSecret")
+        .select("-password -twoFactorSecret -tempTwoFactorSecret -refreshTokens")
         .lean();
 
     if (!user) {
@@ -45,7 +45,7 @@ const getUserById = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Update User Profile Info
+// 3. Update User Profile Info (تم التحويل لـ Mongoose Document .save() لتشغيل הـ Middleware Hooks)
 const updateUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -62,46 +62,48 @@ const updateUser = asyncHandler(async (req, res) => {
         throw new Error("Forbidden: You are not authorized to update this profile");
     }
 
-    const allowedUpdates = {};
-    if (req.body.first_name) allowedUpdates.first_name = String(req.body.first_name).trim();
-    if (req.body.last_name) allowedUpdates.last_name = String(req.body.last_name).trim();
-
     if (req.body.email) {
-        const cleanEmail = String(req.body.email).toLowerCase().trim();
-        const emailExists = await User.findOne({ email: cleanEmail, _id: { $ne: id } });
-        if (emailExists) {
-            res.status(409);
-            throw new Error("Email address is already in use by another account");
-        }
-        allowedUpdates.email = cleanEmail;
+        res.status(400);
+        throw new Error("Email address cannot be updated via this route. Use email update verification flow.");
     }
 
-    try {
-        const updatedUser = await User.findByIdAndUpdate(
-            id,
-            allowedUpdates,
-            { new: true, runValidators: true }
-        ).select("-password -twoFactorSecret -tempTwoFactorSecret");
-
-        if (!updatedUser) {
-            res.status(404);
-            throw new Error("User not found");
-        }
-
-        return res.status(200).json({
-            status: "success",
-            data: updatedUser
-        });
-    } catch (error) {
-        if (error.code === 11000) {
-            res.status(409);
-            throw new Error("Email address is already in use by another account");
-        }
-        throw error;
+    const user = await User.findById(id);
+    if (!user) {
+        res.status(404);
+        throw new Error("User not found");
     }
+
+    let isModified = false;
+    if (typeof req.body.first_name === "string" && req.body.first_name.trim() !== "") {
+        user.first_name = req.body.first_name.trim();
+        isModified = true;
+    }
+    if (typeof req.body.last_name === "string" && req.body.last_name.trim() !== "") {
+        user.last_name = req.body.last_name.trim();
+        isModified = true;
+    }
+
+    if (!isModified) {
+        res.status(400);
+        throw new Error("No valid fields provided for update");
+    }
+
+    await user.save();
+
+    // تجهيز الاستجابة دون إعادة البيانات الحساسة
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    delete userResponse.twoFactorSecret;
+    delete userResponse.tempTwoFactorSecret;
+    delete userResponse.refreshTokens;
+
+    return res.status(200).json({
+        status: "success",
+        data: userResponse
+    });
 });
 
-// 4. Change User Role (Admin Only)
+// 4. Change User Role
 const changeUserRole = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
@@ -134,6 +136,11 @@ const changeUserRole = asyncHandler(async (req, res) => {
         throw new Error("User not found");
     }
 
+    if (user.role === "admin") {
+        res.status(403);
+        throw new Error("Security Alert: You cannot modify or demote another Admin account");
+    }
+
     user.role = normalizedRole;
     await user.save();
 
@@ -148,7 +155,7 @@ const changeUserRole = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. Delete User (Admin Only)
+// 5. Delete User
 const deleteUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
 

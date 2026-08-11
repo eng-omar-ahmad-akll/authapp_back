@@ -1,12 +1,24 @@
 const Joi = require("joi");
 
-// OWASP Pattern لكلمات المرور القوية
-const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#._-]).{8,128}$/;
-
 const options = {
     abortEarly: false,
-    stripUnknown: true // يمنع حقول الـ Injection ويحذف الحقول الغريبة
+    stripUnknown: true
 };
+
+const passwordSchema = Joi.string()
+    .min(8)
+    .max(128)
+    .pattern(/[a-z]/, "lowercase")
+    .pattern(/[A-Z]/, "uppercase")
+    .pattern(/\d/, "number")
+    .pattern(/[@$!%*?&#._-]/, "special character")
+    .required()
+    .messages({
+        "string.min": "Password must be at least 8 characters long",
+        "string.max": "Password cannot exceed 128 characters",
+        "string.pattern.name": "Password must contain at least one {#name}",
+        "string.empty": "Password is required"
+    });
 
 const registerSchema = Joi.object({
     first_name: Joi.string()
@@ -32,7 +44,7 @@ const registerSchema = Joi.object({
         }),
 
     email: Joi.string()
-        .email({ tlds: { allow: false } })
+        .email({ tlds: { allow: true } })
         .trim()
         .lowercase()
         .max(100)
@@ -42,18 +54,12 @@ const registerSchema = Joi.object({
             "string.empty": "Email address is required"
         }),
 
-    password: Joi.string()
-        .required()
-        .pattern(strongPasswordPattern)
-        .messages({
-            "string.pattern.base": "Password must be 8-128 chars, include upper & lower case, number and a special character",
-            "string.empty": "Password is required"
-        })
+    password: passwordSchema
 });
 
 const loginSchema = Joi.object({
     email: Joi.string()
-        .email({ tlds: { allow: false } })
+        .email({ tlds: { allow: true } })
         .trim()
         .lowercase()
         .required(),
@@ -68,7 +74,7 @@ const loginSchema = Joi.object({
 
 const forgotPasswordSchema = Joi.object({
     email: Joi.string()
-        .email({ tlds: { allow: false } })
+        .email({ tlds: { allow: true } })
         .trim()
         .lowercase()
         .required()
@@ -76,7 +82,7 @@ const forgotPasswordSchema = Joi.object({
 
 const resetPasswordSchema = Joi.object({
     email: Joi.string()
-        .email({ tlds: { allow: false } })
+        .email({ tlds: { allow: true } })
         .trim()
         .lowercase()
         .required(),
@@ -84,9 +90,7 @@ const resetPasswordSchema = Joi.object({
         .length(6)
         .pattern(/^\d+$/)
         .required(),
-    newPassword: Joi.string()
-        .required()
-        .pattern(strongPasswordPattern)
+    newPassword: passwordSchema
 });
 
 const validateRegister = (req, res, next) => {

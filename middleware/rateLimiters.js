@@ -1,9 +1,25 @@
+// rateLimiters.js
 const rateLimit = require("express-rate-limit");
 
-// 1. Limiter عام لجميع مسارات الـ API
+/**
+ * دالة آمنة لاستخراج IP الحقيقي للعميل لتفادي IP Spoofing و IP Collisions خلف البروكسي
+ */
+const getClientIp = (req) => {
+    return req.ip || req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "127.0.0.1";
+};
+
+/**
+ * تطهير ومعايرة البريد الإلكتروني لمنع الثغرات الترتيبية ومحاولات التجاوز
+ */
+const getNormalizedEmail = (req) => {
+    const rawEmail = req.body && typeof req.body.email === "string" ? req.body.email : "";
+    return rawEmail.toLowerCase().replace(/\s+/g, "");
+};
+
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 دقيقة
+    windowMs: 15 * 60 * 1000,
     max: 100,
+    keyGenerator: (req) => getClientIp(req),
     message: { 
         status: "fail", 
         message: "Too many requests from this IP, please try again after 15 minutes" 
@@ -12,22 +28,26 @@ const apiLimiter = rateLimit({
     legacyHeaders: false
 });
 
-// 2. Limiter شديد الحماية لمسار تسجيل الدخول
 const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 دقيقة
+    windowMs: 15 * 60 * 1000,
     max: 5,
+    keyGenerator: (req) => {
+        const clientIp = getClientIp(req);
+        const email = getNormalizedEmail(req);
+        return email ? `${clientIp}_${email}` : clientIp;
+    },
     message: { 
         status: "fail", 
-        message: "Too many login attempts, please try again after 15 minutes" 
+        message: "Too many login attempts for this account, please try again after 15 minutes" 
     },
     standardHeaders: true,
     legacyHeaders: false
 });
 
-// 3. Limiter لمسارات Auth العامة (مثل إنشاء الحسابات)
 const authLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000, // ساعة كاملة
+    windowMs: 60 * 60 * 1000,
     max: 10,
+    keyGenerator: (req) => getClientIp(req),
     message: { 
         status: "fail", 
         message: "Too many accounts created from this IP, please try again later" 
@@ -36,13 +56,17 @@ const authLimiter = rateLimit({
     legacyHeaders: false
 });
 
-// 4. Limiter لمسارات الـ OTP وتغيير كلمة السر
 const otpLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 دقيقة
+    windowMs: 15 * 60 * 1000,
     max: 3,
+    keyGenerator: (req) => {
+        const clientIp = getClientIp(req);
+        const email = getNormalizedEmail(req);
+        return email ? `${clientIp}_${email}` : clientIp;
+    },
     message: { 
         status: "fail", 
-        message: "Too many password reset/OTP requests, please try again after 15 minutes" 
+        message: "Too many password reset/OTP requests for this account, please try again after 15 minutes" 
     },
     standardHeaders: true,
     legacyHeaders: false

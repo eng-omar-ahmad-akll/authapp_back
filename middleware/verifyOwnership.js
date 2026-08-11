@@ -4,14 +4,21 @@ const verifyOwnershipOrAdmin = (getTargetUserIdFn) => {
             return res.status(401).json({ status: "fail", message: "Unauthorized" });
         }
 
+        if (typeof getTargetUserIdFn !== "function") {
+            return res.status(500).json({ status: "error", message: "Internal Server Error - Invalid ownership resolver" });
+        }
+
         const rawTargetId = getTargetUserIdFn(req);
-        // التقط المعرف سواء كان ObjectId مجرد أو Object مأهول بـ populate
-        const targetUserId = rawTargetId?._id ? rawTargetId._id.toString() : rawTargetId?.toString();
         
+        if (!rawTargetId) {
+            return res.status(400).json({ status: "fail", message: "Bad Request - Unable to identify target resource owner" });
+        }
+
+        const targetUserId = rawTargetId?._id ? rawTargetId._id.toString() : rawTargetId?.toString();
         const currentUserId = req.user.id?.toString() || req.user._id?.toString() || req.user.toString();
         const currentUserRole = req.user.role;
 
-        const isOwner = currentUserId === targetUserId;
+        const isOwner = Boolean(currentUserId && targetUserId && currentUserId === targetUserId);
         const isAdmin = currentUserRole === "admin";
 
         if (!isOwner && !isAdmin) {

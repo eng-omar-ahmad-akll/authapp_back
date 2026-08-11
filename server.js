@@ -15,26 +15,20 @@ const { apiLimiter } = require("./middleware/rateLimiters");
 
 const app = express();
 
-// Connect to Database
 connectDB();
 
 // 1. Security HTTP Headers
 app.use(helmet());
 
-// 2. Core Parsers with Body Size Limits
+// 2. Core Parsers
 app.set("trust proxy", 1);
 app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
-// 3. Safe NoSQL Injection Sanitization
-app.use((req, res, next) => {
-    if (req.body) mongoSanitize.sanitize(req.body);
-    if (req.params) mongoSanitize.sanitize(req.params);
-    if (req.query) mongoSanitize.sanitize(req.query);
-    next();
-});
+// 3. Express Mongo Sanitize القياسي المحصن ضد الأجسام المتداخلة
+app.use(mongoSanitize({ replaceWith: "_" }));
 
 // 4. Rate Limiting
 app.use("/api", apiLimiter);
@@ -63,7 +57,6 @@ app.use((req, res) => {
 // 8. Global Error Handler Middleware
 app.use(globalErrorHandler);
 
-// Listener for Local Development
 const PORT = process.env.PORT || 5000;
 
 if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {

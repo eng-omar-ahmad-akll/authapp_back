@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 const otpSchema = new mongoose.Schema(
     {
@@ -31,20 +31,16 @@ const otpSchema = new mongoose.Schema(
     { timestamps: false }
 );
 
-otpSchema.pre("save", async function (next) {
+// استخدام SHA256 لحماية الـ CPU من إجهاد Bcrypt
+otpSchema.pre("save", function (next) {
     if (!this.isModified("otp")) return next();
-
-    try {
-        const salt = await bcrypt.genSalt(10);
-        this.otp = await bcrypt.hash(this.otp, salt);
-        next();
-    } catch (err) {
-        next(err);
-    }
+    this.otp = crypto.createHash("sha256").update(this.otp).digest("hex");
+    next();
 });
 
-otpSchema.methods.compareOTP = async function (candidateOTP) {
-    return await bcrypt.compare(candidateOTP, this.otp);
+otpSchema.methods.compareOTP = function (candidateOTP) {
+    const hashedCandidate = crypto.createHash("sha256").update(candidateOTP).digest("hex");
+    return this.otp === hashedCandidate;
 };
 
 module.exports = mongoose.model("OTP", otpSchema);

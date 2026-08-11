@@ -49,6 +49,8 @@ const blogSchema = new mongoose.Schema(
     }
 );
 
+// الفهارس المركبة لحماية الأداء عند الاستعلامات ضخمة البيانات
+blogSchema.index({ tags: 1, createdAt: -1 });
 blogSchema.index({ author: 1, createdAt: -1 });
 blogSchema.index({ createdAt: -1 });
 blogSchema.index({ title: "text", tags: "text", content: "text" });
