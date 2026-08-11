@@ -261,9 +261,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     return res.status(200).json(genericResponse);
 });
 
-// 6. Reset Password (حظر Brute-force وتحديث passwordChangedAt)
-// ... باقي الاستدعاءات كما هي
-
+// 6. Reset Password (حظر Brute-force وتدمير الـ OTP عند المحاولة الخامسة الخاطئة)
 const resetPassword = asyncHandler(async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
@@ -288,6 +286,12 @@ const resetPassword = asyncHandler(async (req, res) => {
 
     const isValidOtp = await otpRecord.compareOTP(String(otp));
     if (!isValidOtp) {
+        // حظر وإلغاء الـ OTP فور الوصول للمحاولة الخامسة
+        if (otpRecord.attempts >= 5) {
+            await OTP.deleteOne({ _id: otpRecord._id });
+            res.status(429);
+            throw new Error("Maximum attempts exceeded. OTP revoked. Please request a new code.");
+        }
         res.status(400);
         throw new Error("Invalid OTP code");
     }
@@ -308,7 +312,6 @@ const resetPassword = asyncHandler(async (req, res) => {
         message: "Password reset successfully"
     });
 });
-
 
 // 7. Setup 2FA
 const setup2FA = asyncHandler(async (req, res) => {
