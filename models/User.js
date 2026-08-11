@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema(
             type: String,
             required: [true, "Last name is required"],
             trim: true,
-            minlength: [2, "Last name must be at least 2 characters"],
+            minlength: [2, "First name must be at least 2 characters"],
             maxlength: [30, "Last name cannot exceed 30 characters"]
         },
         email: {
@@ -52,6 +52,10 @@ const userSchema = new mongoose.Schema(
         passwordChangedAt: {
             type: Date,
             select: false
+        },
+        lastLoginAt: {
+            type: Date,
+            default: null
         }
     },
     {

@@ -18,6 +18,10 @@ const otpSchema = new mongoose.Schema(
             type: Number,
             default: 0
         },
+        lastOtpUsedAt: {
+            type: Date,
+            default: null
+        },
         createdAt: { 
             type: Date, 
             default: Date.now, 
@@ -27,7 +31,6 @@ const otpSchema = new mongoose.Schema(
     { timestamps: false }
 );
 
-// التشفير يحدث فقط عند تعديل حقل otp لمنع Re-hashing عند زيادة المحاولات
 otpSchema.pre("save", async function (next) {
     if (!this.isModified("otp")) return next();
 

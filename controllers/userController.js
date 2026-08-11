@@ -2,7 +2,6 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const { asyncHandler } = require("../middleware/errorHandler");
 
-// استخراج الـ ID بشكل موحد وآمن
 const getUserIdFromReq = (req) => {
     if (!req.user) return null;
     if (typeof req.user === "string") return req.user;
@@ -55,7 +54,6 @@ const updateUser = asyncHandler(async (req, res) => {
         throw new Error("Invalid User ID format");
     }
 
-    // علاج ثغرة الـ IDOR: التأكد أن صاحب الحساب نفسه أو Admin هو من يجري التعديل
     const currentUserId = getUserIdFromReq(req);
     const currentUserRole = req.user?.role;
 
@@ -95,7 +93,6 @@ const updateUser = asyncHandler(async (req, res) => {
             data: updatedUser
         });
     } catch (error) {
-        // حماية أضافية من الـ Race Conditions للـ Unique Email
         if (error.code === 11000) {
             res.status(409);
             throw new Error("Email address is already in use by another account");

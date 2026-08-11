@@ -7,7 +7,6 @@ const getUserIdFromReq = (req) => {
     return req.user?.id || req.user?._id?.toString() || req.user;
 };
 
-// خيارات تطهير الـ HTML المسموح بها في المقالات (حماية من Stored XSS)
 const sanitizeOptions = {
     allowedTags: sanitizeHtml.defaults.allowedTags.concat([
         "img", "h1", "h2", "h3", "u", "s", "code", "pre", "blockquote", "span"
@@ -24,7 +23,7 @@ const sanitizeOptions = {
 // 1. Get All Blogs
 const getAllBlogs = asyncHandler(async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10)); // تقييد الـ limit لمنع DoS
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
     const skip = (page - 1) * limit;
     const search = req.query.search ? String(req.query.search).trim() : "";
 
@@ -33,7 +32,6 @@ const getAllBlogs = asyncHandler(async (req, res) => {
         query = { $text: { $search: search } };
     }
 
-    // تنفيذ الاستعلامات بالتوازي لتخفيض زمن الاستجابة (Latency Optimization)
     const [blogs, total] = await Promise.all([
         Blog.find(query)
             .populate("author", "first_name last_name")
@@ -54,7 +52,7 @@ const getAllBlogs = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Get Single Blog
+// 2. Get Single Blog (تمت إضافة تسجيل وتحديث lastReadAt)
 const getBlogById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -63,9 +61,14 @@ const getBlogById = asyncHandler(async (req, res) => {
         throw new Error("Invalid Blog ID format");
     }
 
-    const blog = await Blog.findById(id)
-        .populate("author", "first_name last_name")
-        .lean();
+    // تحديث تاريخ آخر قراءة بشكل ذرّي
+    const blog = await Blog.findByIdAndUpdate(
+        id,
+        { $set: { lastReadAt: new Date() } },
+        { new: true }
+    )
+    .populate("author", "first_name last_name")
+    .lean();
 
     if (!blog) {
         res.status(404);

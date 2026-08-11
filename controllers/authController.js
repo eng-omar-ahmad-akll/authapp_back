@@ -9,7 +9,7 @@ const OTP = require("../models/OTP");
 const sendEmail = require("../config/sendEmail");
 const { asyncHandler } = require("../middleware/errorHandler");
 
-// 1. Register User (إجابة موحدة للوقاية من User Enumeration)
+// 1. Register User
 const register = asyncHandler(async (req, res) => {
     const { first_name, last_name, email, password } = req.body;
     if (!email || !password) {
@@ -67,7 +67,7 @@ const register = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Login User
+// 2. Login User (تمت إضافة تسجيل lastLoginAt)
 const login = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     const rawCode = req.body?.twoFactorCode || req.body?.code || req.body?.token || req.body?.totpCode;
@@ -118,6 +118,10 @@ const login = asyncHandler(async (req, res) => {
         }
     }
 
+    // تسجيل وتحديث تاريخ آخر دخول
+    foundUser.lastLoginAt = new Date();
+    await foundUser.save();
+
     const normalizedRole = (foundUser.role || "user").toLowerCase();
 
     const accessToken = jwt.sign(
@@ -147,12 +151,13 @@ const login = asyncHandler(async (req, res) => {
             email: foundUser.email,
             first_name: foundUser.first_name,
             last_name: foundUser.last_name,
-            role: normalizedRole
+            role: normalizedRole,
+            lastLoginAt: foundUser.lastLoginAt
         }
     });
 });
 
-// 3. Refresh Access Token (تطبيق RTR وإبطال الجلسات عند تغيير كلمة السر)
+// 3. Refresh Access Token
 const refresh = asyncHandler(async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) {
@@ -184,7 +189,6 @@ const refresh = asyncHandler(async (req, res) => {
 
     const normalizedRole = (foundUser.role || "user").toLowerCase();
 
-    // Refresh Token Rotation (RTR)
     const newAccessToken = jwt.sign(
         { UserInfo: { id: foundUser._id, role: normalizedRole } },
         process.env.ACCESS_TOKEN_SECRET,
@@ -227,7 +231,7 @@ const logout = asyncHandler(async (req, res) => {
     return res.status(200).json({ status: "success", message: "Cookie cleared successfully" });
 });
 
-// 5. Forgot Password (منع User Enumeration)
+// 5. Forgot Password
 const forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
 
@@ -261,7 +265,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     return res.status(200).json(genericResponse);
 });
 
-// 6. Reset Password (حظر Brute-force وتدمير الـ OTP عند المحاولة الخامسة الخاطئة)
+// 6. Reset Password (تمت إضافة تسجيل lastOtpUsedAt)
 const resetPassword = asyncHandler(async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
@@ -272,7 +276,6 @@ const resetPassword = asyncHandler(async (req, res) => {
 
     const cleanEmail = email.toLowerCase().trim();
     
-    // زيادة محاولات الـ OTP بعملية ذرية (Atomic Operation) لمنع الـ Race Conditions
     const otpRecord = await OTP.findOneAndUpdate(
         { email: cleanEmail, attempts: { $lt: 5 } },
         { $inc: { attempts: 1 } },
@@ -286,7 +289,6 @@ const resetPassword = asyncHandler(async (req, res) => {
 
     const isValidOtp = await otpRecord.compareOTP(String(otp));
     if (!isValidOtp) {
-        // حظر وإلغاء الـ OTP فور الوصول للمحاولة الخامسة
         if (otpRecord.attempts >= 5) {
             await OTP.deleteOne({ _id: otpRecord._id });
             res.status(429);
@@ -295,6 +297,9 @@ const resetPassword = asyncHandler(async (req, res) => {
         res.status(400);
         throw new Error("Invalid OTP code");
     }
+
+    // تسكيل وقت الاستخدام قبل الحذف
+    otpRecord.lastOtpUsedAt = new Date();
 
     const user = await User.findOne({ email: cleanEmail });
     if (!user) {
