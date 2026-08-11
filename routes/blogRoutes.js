@@ -3,22 +3,28 @@ const router = express.Router();
 
 const blogsController = require("../controllers/blogsController");
 const verifyJWT = require("../middleware/verifyJWT");
+const verifyRoles = require("../middleware/verifyRoles");
 const { verifyBlogOwnership } = require("../middleware/verifyBlogOwnership");
 const { validateCreateBlog, validateUpdateBlog } = require("../middleware/blogValidation");
 const validateObjectId = require("../middleware/validateObjectId");
 const { apiLimiter } = require("../middleware/rateLimiters");
 
-// 1. المسارات العامة (Public Routes)
+// 1. المسارات العامة (Public Routes - متاحة للجميع)
 router.get("/", apiLimiter, blogsController.getAllBlogs);
 router.get("/:id", apiLimiter, validateObjectId("id"), blogsController.getBlogById);
 
-// 2. تطبيق الـ Authentication على المسارات المحمية
+// 2. حماية كل ما يلي بالـ JWT
 router.use(verifyJWT);
 
-// إنشاء مقال جديد
-router.post("/", validateCreateBlog, blogsController.createBlog);
+// 3. إنشاء مقال جديد (حصري لـ Author و Admin)
+router.post(
+    "/",
+    verifyRoles("author", "admin"),
+    validateCreateBlog,
+    blogsController.createBlog
+);
 
-// تعديل مقال (فحص الـ ObjectId ثم الـ Payload ثم الملكية)
+// 4. تعديل مقال (مسموح لـ Author صاحب المقال أو Admin)
 router.patch(
     "/:id",
     validateObjectId("id"),
@@ -27,7 +33,7 @@ router.patch(
     blogsController.updateBlog
 );
 
-// حذف مقال (إضافة validateObjectId لحماية قاعدة البيانات من الاستعلامات الخاطئة)
+// 5. حذف مقال (مسموح لـ Author صاحب المقال أو Admin)
 router.delete(
     "/:id",
     validateObjectId("id"),

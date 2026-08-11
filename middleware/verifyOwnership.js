@@ -1,21 +1,20 @@
-const verifyOwnershipOrAdmin = (getResourceUserId) => {
+const verifyOwnershipOrAdmin = (getTargetUserIdFn) => {
     return (req, res, next) => {
-        const currentUserId = (req.user?.id || req.user)?._id?.toString() || (req.user?.id || req.user)?.toString();
-        const resourceUserId = getResourceUserId(req)?.toString();
+        if (!req.user) {
+            return res.status(401).json({ status: "fail", message: "Unauthorized" });
+        }
 
-        // قراءة الـ role سواء تم تعيينه من verifyRoles أو قادم مباشرة من verifyJWT
-        const userRole = (req.role || req.user?.role || "").toString().toLowerCase();
-        const userRoles = Array.isArray(req.user?.roles) 
-            ? req.user.roles.map(r => String(r).toLowerCase()) 
-            : [];
+        const targetUserId = getTargetUserIdFn(req);
+        const currentUserId = req.user.id.toString();
+        const currentUserRole = req.user.role;
 
-        const isOwner = Boolean(currentUserId && resourceUserId && currentUserId === resourceUserId);
-        const isAdmin = userRole === "admin" || userRoles.includes("admin");
+        const isOwner = currentUserId === targetUserId?.toString();
+        const isAdmin = currentUserRole === "admin";
 
         if (!isOwner && !isAdmin) {
             return res.status(403).json({
                 status: "fail",
-                message: "Forbidden - You do not own this resource"
+                message: "Access Denied: You can only manage your own profile"
             });
         }
 

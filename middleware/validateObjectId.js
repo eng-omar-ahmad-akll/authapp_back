@@ -3,14 +3,12 @@ const mongoose = require("mongoose");
 const validateObjectId = (paramName = "id") => {
     return (req, res, next) => {
         const id = req.params[paramName];
-
-        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+        if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).json({
                 status: "fail",
-                message: `Invalid Mongo ObjectId format for parameter: '${paramName}'`
+                message: `Invalid ID format for parameter '${paramName}'`
             });
         }
-
         next();
     };
 };

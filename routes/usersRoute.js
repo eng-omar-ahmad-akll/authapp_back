@@ -1,7 +1,14 @@
 const express = require("express");
 const router = express.Router();
 
-const { getAllUsers, getUserById, deleteUser, updateUser } = require("../controllers/userController");
+const { 
+    getAllUsers, 
+    getUserById, 
+    deleteUser, 
+    updateUser, 
+    changeUserRole 
+} = require("../controllers/userController");
+
 const verifyJWT = require("../middleware/verifyJWT");
 const verifyRoles = require("../middleware/verifyRoles");
 const { verifyOwnershipOrAdmin } = require("../middleware/verifyOwnership");
@@ -9,12 +16,21 @@ const validateObjectId = require("../middleware/validateObjectId");
 const { validateUpdateUser } = require("../middleware/userValidation");
 const { apiLimiter } = require("../middleware/rateLimiters");
 
+// حماية جميع المسارات بالـ JWT
 router.use(verifyJWT);
 
 // 1. عرض جميع المستخدمين (Admin Only)
 router.get("/", verifyRoles("admin"), apiLimiter, getAllUsers);
 
-// 2. المسارات المربوطة بمعرف مستخدم
+// 2. تعديل رتبة مستخدم (Admin Only)
+router.patch(
+    "/:id/role",
+    validateObjectId("id"),
+    verifyRoles("admin"),
+    changeUserRole
+);
+
+// 3. مسارات المستخدم المحددة بمعرف ID
 router.route("/:id")
     .all(validateObjectId("id"))
     .get(

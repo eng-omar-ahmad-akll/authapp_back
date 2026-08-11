@@ -17,7 +17,7 @@ const {
     apiLimiter 
 } = require("../middleware/rateLimiters");
 
-// 1. التسجيل والدخول
+// 1. التسجيل والدخول (عام)
 router.route("/register")
     .post(authLimiter, validateRegister, authController.register);
 
@@ -31,14 +31,14 @@ router.route("/refresh")
 router.route("/logout")
     .post(authController.logout);
 
-// 3. Password Reset
+// 3. Password Reset (محدد بـ otpLimiter)
 router.route("/forgot-password")
     .post(otpLimiter, validateForgotPassword, authController.forgotPassword);
 
 router.route("/reset-password")
     .post(otpLimiter, validateResetPassword, authController.resetPassword);
 
-// 4. 2FA Routes
+// 4. 2FA Routes (محمية بـ verifyJWT)
 router.use(verifyJWT);
 
 router.route("/2fa/setup")

@@ -6,21 +6,20 @@ const getUserIdFromReq = (req) => {
     return req.user?.id || req.user?._id || req.user;
 };
 
-// 1. Get All Blogs (مع Pagination & Text Search)
+// 1. Get All Blogs (مفتوح للجميع)
 const getAllBlogs = asyncHandler(async (req, res) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const skip = (page - 1) * limit;
     const search = req.query.search || "";
 
-    // بناء كائن البحث (Text Search أو Regex للعنوان)
     let query = {};
     if (search) {
         query = { $text: { $search: search } };
     }
 
     const blogs = await Blog.find(query)
-        .populate("author", "first_name last_name email")
+        .populate("author", "first_name last_name email role")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
@@ -37,7 +36,7 @@ const getAllBlogs = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Get Single Blog
+// 2. Get Single Blog (مفتوح للجميع)
 const getBlogById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -46,7 +45,7 @@ const getBlogById = asyncHandler(async (req, res) => {
         throw new Error("Invalid Blog ID format");
     }
 
-    const blog = await Blog.findById(id).populate("author", "first_name last_name email");
+    const blog = await Blog.findById(id).populate("author", "first_name last_name email role");
 
     if (!blog) {
         res.status(404);
@@ -59,7 +58,7 @@ const getBlogById = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Create Blog
+// 3. Create Blog (حصري لـ Author و Admin)
 const createBlog = asyncHandler(async (req, res) => {
     const { title, content, tags } = req.body;
     const userId = getUserIdFromReq(req);
@@ -82,7 +81,7 @@ const createBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. Update Blog
+// 4. Update Blog (لـ Author صاحب المقال أو Admin)
 const updateBlog = asyncHandler(async (req, res) => {
     const blog = req.blog;
     const { title, content, tags } = req.body;
@@ -99,7 +98,7 @@ const updateBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. Delete Blog
+// 5. Delete Blog (لـ Author صاحب المقال أو Admin)
 const deleteBlog = asyncHandler(async (req, res) => {
     const blog = req.blog;
     await blog.deleteOne();

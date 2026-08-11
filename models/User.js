@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
 
 const userSchema = new mongoose.Schema(
     {
@@ -14,8 +14,8 @@ const userSchema = new mongoose.Schema(
             type: String,
             required: [true, "Last name is required"],
             trim: true,
-            minlength: [2, "Last name must be at least 2 characters"],
-            maxlength: [30, "Last name cannot exceed 30 characters"]
+            minlength: [2, "First name must be at least 2 characters"],
+            maxlength: [30, "First name cannot exceed 30 characters"]
         },
         email: {
             type: String,
@@ -28,17 +28,17 @@ const userSchema = new mongoose.Schema(
         password: {
             type: String,
             required: [true, "Password is required"],
-            select: false // OWASP Mitigation: إخفاء كلمة السر تلقائياً من جميع الاستعلامات
+            select: false
         },
         role: {
             type: String,
-            enum: ["user", "admin"],
+            enum: ["user", "author", "admin"],
             default: "user"
         },
         twoFactorSecret: {
             type: String,
             default: null,
-            select: false // OWASP Mitigation: إخفاء سر الـ 2FA تلقائياً لمنع تسريبه
+            select: false
         },
         isTwoFactorEnabled: {
             type: Boolean,
@@ -58,12 +58,11 @@ const userSchema = new mongoose.Schema(
     }
 );
 
-// 1. تشفير كلمة السر تلقائياً قبل الحفظ في قاعدة البيانات
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
 
     try {
-        const salt = await bcrypt.genSalt(12);
+        const salt = await bcrypt.genSalt(10);
         this.password = await bcrypt.hash(this.password, salt);
         next();
     } catch (err) {
@@ -71,7 +70,6 @@ userSchema.pre("save", async function (next) {
     }
 });
 
-// 2. دالة مخصصة للتحقق من صحة كلمة السر عند تسجيل الدخول
 userSchema.methods.matchPassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };

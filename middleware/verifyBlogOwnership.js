@@ -1,39 +1,33 @@
+const mongoose = require("mongoose");
 const Blog = require("../models/Blog");
-const { asyncHandler } = require("../middleware/errorHandler");
+const { asyncHandler } = require("./errorHandler");
 
 const verifyBlogOwnership = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
+    const currentUserId = req.user.id.toString();
+    const currentUserRole = req.user.role;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400);
+        throw new Error("Invalid Blog ID format");
+    }
 
     const blog = await Blog.findById(id);
+
     if (!blog) {
-        return res.status(404).json({
-            status: "fail",
-            message: "Blog not found"
-        });
+        res.status(404);
+        throw new Error("Blog not found");
     }
 
-    const currentUserId = (req.user?.id || req.user)?._id?.toString() || (req.user?.id || req.user)?.toString();
-    
-    // تصحيح: استخدام blog.author للربط مع Mongoose Schema
-    const authorId = blog.author?._id?.toString() || blog.author?.toString();
-    
-    // توحيد قراءة الـ Role لسواء أتى من verifyRoles أو verifyJWT
-    const userRole = (req.role || req.user?.role || "").toString().toLowerCase();
-    const userRoles = Array.isArray(req.user?.roles) 
-        ? req.user.roles.map(r => String(r).toLowerCase()) 
-        : [];
+    const isAuthor = blog.author.toString() === currentUserId;
+    const isAdmin = currentUserRole === "admin";
 
-    const isOwner = Boolean(currentUserId && authorId && currentUserId === authorId);
-    const isAdmin = userRole === "admin" || userRoles.includes("admin");
-
-    if (!isOwner && !isAdmin) {
-        return res.status(403).json({
-            status: "fail",
-            message: "Forbidden - You do not have permission to modify or delete this blog"
-        });
+    if (!isAuthor && !isAdmin) {
+        res.status(403);
+        throw new Error("Access Denied: You are not authorized to modify or delete this blog");
     }
 
-    req.blog = blog; // توفير DB Call إضافي في الـ Controller
+    req.blog = blog;
     next();
 });
 

@@ -8,7 +8,7 @@ const OTP = require("../models/OTP");
 const sendEmail = require("../config/sendEmail");
 const { asyncHandler } = require("../middleware/errorHandler");
 
-// 1. Register User
+// 1. Register User (تسجيل جديد - محصور بـ role: "user")
 const register = asyncHandler(async (req, res) => {
     const { first_name, last_name, email, password } = req.body;
     if (!email || !password) {
@@ -24,14 +24,12 @@ const register = asyncHandler(async (req, res) => {
         throw new Error("User with this email already exists");
     }
 
-    // تشفير كلمة السر بشكل صحيح
-    const hashedPassword = await bcrypt.hash(password, 10);
-
+    // إجبار الـ role على "user" لمنع ثغرات Escalation
     const user = await User.create({
         first_name,
         last_name,
         email: cleanEmail,
-        password: hashedPassword, // FIX: حفظ كلمة السر المشفرة
+        password,
         role: "user"
     });
 
@@ -57,11 +55,15 @@ const register = asyncHandler(async (req, res) => {
     });
 
     return res.status(201).json({
+        status: "success",
         accessToken,
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        role: normalizedRole
+        user: {
+            id: user._id,
+            email: user.email,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            role: normalizedRole
+        }
     });
 });
 
@@ -77,14 +79,16 @@ const login = asyncHandler(async (req, res) => {
 
     const cleanEmail = email.toLowerCase().trim();
 
-    // FIX: إضافة .select("+password") لضمان جلب كلمة السر دائماً من MongoDB
-    const foundUser = await User.findOne({ email: cleanEmail }).select("+password").exec();
+    const foundUser = await User.findOne({ email: cleanEmail })
+        .select("+password +twoFactorSecret")
+        .exec();
+
     if (!foundUser || !foundUser.password) {
         res.status(401);
         throw new Error("Invalid email or password");
     }
 
-    const match = await bcrypt.compare(password, foundUser.password);
+    const match = await foundUser.matchPassword(password);
     if (!match) {
         res.status(401);
         throw new Error("Invalid email or password");
@@ -105,7 +109,7 @@ const login = asyncHandler(async (req, res) => {
             secret: foundUser.twoFactorSecret,
             encoding: "base32",
             token: cleanToken,
-            window: 4
+            window: 6
         });
 
         if (!verified) {
@@ -116,6 +120,7 @@ const login = asyncHandler(async (req, res) => {
 
     const normalizedRole = (foundUser.role || "user").toLowerCase();
 
+    // تشفير الـ ID والـ Role داخل الـ Access Token
     const accessToken = jwt.sign(
         { UserInfo: { id: foundUser._id, role: normalizedRole } },
         process.env.ACCESS_TOKEN_SECRET,
@@ -136,13 +141,19 @@ const login = asyncHandler(async (req, res) => {
     });
 
     return res.status(200).json({
+        status: "success",
         accessToken,
-        email: foundUser.email,
-        role: normalizedRole
+        user: {
+            id: foundUser._id,
+            email: foundUser.email,
+            first_name: foundUser.first_name,
+            last_name: foundUser.last_name,
+            role: normalizedRole
+        }
     });
 });
 
-// 3. Refresh Access Token
+// 3. Refresh Access Token (جلب أحدث Role مباشرة من الـ DB)
 const refresh = asyncHandler(async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) {
@@ -168,13 +179,18 @@ const refresh = asyncHandler(async (req, res) => {
 
     const normalizedRole = (foundUser.role || "user").toLowerCase();
 
+    // أصدار Access Token جديد بالـ Role المحدث في حال قام الأدمن بتغيير رتبته
     const accessToken = jwt.sign(
         { UserInfo: { id: foundUser._id, role: normalizedRole } },
         process.env.ACCESS_TOKEN_SECRET,
         { expiresIn: "15m" }
     );
 
-    return res.json({ accessToken });
+    return res.json({ 
+        status: "success",
+        accessToken,
+        role: normalizedRole 
+    });
 });
 
 // 4. Logout User
@@ -190,7 +206,7 @@ const logout = asyncHandler(async (req, res) => {
         sameSite: "None",
     });
 
-    return res.status(200).json({ message: "Cookie cleared successfully" });
+    return res.status(200).json({ status: "success", message: "Cookie cleared successfully" });
 });
 
 // 5. Forgot Password
@@ -210,11 +226,9 @@ const forgotPassword = asyncHandler(async (req, res) => {
     }
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const hashedOtp = await bcrypt.hash(otpCode, 10);
 
     await OTP.deleteMany({ email: cleanEmail });
-    // FIX: حفظ الـ Hashed OTP في الداتا بيز للحماية وللتوافق مع bcrypt.compare
-    await OTP.create({ email: cleanEmail, otp: hashedOtp });
+    await OTP.create({ email: cleanEmail, otp: otpCode });
 
     await sendEmail({
         email: user.email,
@@ -223,6 +237,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     });
 
     return res.status(200).json({
+        status: "success",
         message: "OTP code sent to your email successfully"
     });
 });
@@ -243,8 +258,10 @@ const resetPassword = asyncHandler(async (req, res) => {
         throw new Error("Invalid or expired OTP code");
     }
 
-    const isValidOtp = await bcrypt.compare(String(otp), otpRecord.otp);
+    const isValidOtp = await otpRecord.compareOTP(String(otp));
     if (!isValidOtp) {
+        otpRecord.attempts += 1;
+        await otpRecord.save();
         res.status(400);
         throw new Error("Invalid OTP code");
     }
@@ -255,12 +272,13 @@ const resetPassword = asyncHandler(async (req, res) => {
         throw new Error("User not found");
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
+    user.password = newPassword;
     await user.save();
 
     await OTP.deleteOne({ _id: otpRecord._id });
 
     return res.status(200).json({
+        status: "success",
         message: "Password reset successfully"
     });
 });
@@ -285,6 +303,7 @@ const setup2FA = asyncHandler(async (req, res) => {
     const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
 
     return res.status(200).json({
+        status: "success",
         message: "Scan QR code or use secret key",
         secret: secret.base32,
         qrCode: qrCodeUrl
@@ -301,7 +320,7 @@ const verify2FA = asyncHandler(async (req, res) => {
         throw new Error("2FA Token is required");
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select("+twoFactorSecret");
     if (!user || !user.twoFactorSecret) {
         res.status(400);
         throw new Error("Please setup 2FA first");
@@ -313,7 +332,7 @@ const verify2FA = asyncHandler(async (req, res) => {
         secret: user.twoFactorSecret,
         encoding: "base32",
         token: cleanToken,
-        window: 4
+        window: 6
     });
 
     if (!verified) {
@@ -325,6 +344,7 @@ const verify2FA = asyncHandler(async (req, res) => {
     await user.save();
 
     return res.status(200).json({
+        status: "success",
         message: "Two-Factor Authentication enabled successfully"
     });
 });
