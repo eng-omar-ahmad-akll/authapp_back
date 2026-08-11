@@ -20,7 +20,7 @@ const sanitizeOptions = {
     allowedSchemes: ["http", "https", "mailto", "data"]
 };
 
-// 1. Get All Blogs
+// 1. Get All Blogs (Public) - تزيد المشاهدات وتحدث تاريخ القراءة لكل المقالات المعروضة في الصفحة
 const getAllBlogs = asyncHandler(async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
@@ -42,6 +42,30 @@ const getAllBlogs = asyncHandler(async (req, res) => {
         Blog.countDocuments(query)
     ]);
 
+    // زيادة viewsCount وتحديث lastReadAt لجميع المقالات المسترجعة دفعة واحدة (Bulk Atomic Update)
+    if (blogs.length > 0) {
+        const now = new Date();
+        const blogIds = blogs.map((b) => b._id);
+
+        await Blog.bulkWrite(
+            blogIds.map((id) => ({
+                updateOne: {
+                    filter: { _id: id },
+                    update: {
+                        $inc: { viewsCount: 1 },
+                        $set: { lastReadAt: now }
+                    }
+                }
+            }))
+        );
+
+        // تحديث القيم في الاستجابة المعروضة لليوزر فوراً
+        blogs.forEach((blog) => {
+            blog.viewsCount = (blog.viewsCount || 0) + 1;
+            blog.lastReadAt = now;
+        });
+    }
+
     return res.status(200).json({
         status: "success",
         count: blogs.length,
@@ -52,7 +76,7 @@ const getAllBlogs = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Get Single Blog (تمت إضافة تسجيل وتحديث lastReadAt)
+// 2. Get Single Blog By ID - تزيد المشاهدات وتحدث تاريخ القراءة لمقال معين
 const getBlogById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -61,14 +85,16 @@ const getBlogById = asyncHandler(async (req, res) => {
         throw new Error("Invalid Blog ID format");
     }
 
-    // تحديث تاريخ آخر قراءة بشكل ذرّي
     const blog = await Blog.findByIdAndUpdate(
         id,
-        { $set: { lastReadAt: new Date() } },
+        {
+            $inc: { viewsCount: 1 },
+            $set: { lastReadAt: new Date() }
+        },
         { new: true }
     )
-    .populate("author", "first_name last_name")
-    .lean();
+        .populate("author", "first_name last_name")
+        .lean();
 
     if (!blog) {
         res.status(404);
@@ -101,8 +127,10 @@ const createBlog = asyncHandler(async (req, res) => {
     const newBlog = await Blog.create({
         title: String(title).trim(),
         content: cleanContent,
-        tags: Array.isArray(tags) ? tags.map(t => String(t).trim()) : [],
-        author: userId
+        tags: Array.isArray(tags) ? tags.map((t) => String(t).trim()) : [],
+        author: userId,
+        viewsCount: 0,
+        lastReadAt: null
     });
 
     return res.status(201).json({
@@ -117,13 +145,13 @@ const updateBlog = asyncHandler(async (req, res) => {
     const { title, content, tags } = req.body;
 
     if (title !== undefined) blog.title = String(title).trim();
-    
+
     if (content !== undefined) {
         blog.content = sanitizeHtml(content, sanitizeOptions);
     }
 
     if (tags !== undefined) {
-        blog.tags = Array.isArray(tags) ? tags.map(t => String(t).trim()) : [];
+        blog.tags = Array.isArray(tags) ? tags.map((t) => String(t).trim()) : [];
     }
 
     const updatedBlog = await blog.save();

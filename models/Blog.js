@@ -29,6 +29,10 @@ const blogSchema = new mongoose.Schema(
             ref: "User",
             required: [true, "Blog author is required"]
         },
+        viewsCount: {
+            type: Number,
+            default: 0
+        },
         lastReadAt: {
             type: Date,
             default: null
