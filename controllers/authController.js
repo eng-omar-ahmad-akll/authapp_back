@@ -105,7 +105,7 @@ const login = asyncHandler(async (req, res) => {
             secret: foundUser.twoFactorSecret,
             encoding: "base32",
             token: cleanToken,
-            window: 2
+            window: 4
         });
 
         if (!verified) {
@@ -313,7 +313,7 @@ const verify2FA = asyncHandler(async (req, res) => {
         secret: user.twoFactorSecret,
         encoding: "base32",
         token: cleanToken,
-        window: 2
+        window: 4
     });
 
     if (!verified) {
