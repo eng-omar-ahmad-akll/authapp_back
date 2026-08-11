@@ -11,7 +11,12 @@ const { asyncHandler } = require("../middleware/errorHandler");
 // 1. Register User
 const register = asyncHandler(async (req, res) => {
     const { first_name, last_name, email, password } = req.body;
-    const cleanEmail = email?.toLowerCase().trim();
+    if (!email || !password) {
+        res.status(400);
+        throw new Error("Email and password are required");
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
 
     const foundUser = await User.findOne({ email: cleanEmail }).exec();
     if (foundUser) {
@@ -19,14 +24,14 @@ const register = asyncHandler(async (req, res) => {
         throw new Error("User with this email already exists");
     }
 
+    // تشفير كلمة السر بشكل صحيح
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // إجبار الـ role على "user" وتوحيد صيغته لحظر الـ Mass Assignment
     const user = await User.create({
         first_name,
         last_name,
         email: cleanEmail,
-        password,
+        password: hashedPassword, // FIX: حفظ كلمة السر المشفرة
         role: "user"
     });
 
@@ -71,8 +76,10 @@ const login = asyncHandler(async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const foundUser = await User.findOne({ email: cleanEmail }).exec();
-    if (!foundUser) {
+
+    // FIX: إضافة .select("+password") لضمان جلب كلمة السر دائماً من MongoDB
+    const foundUser = await User.findOne({ email: cleanEmail }).select("+password").exec();
+    if (!foundUser || !foundUser.password) {
         res.status(401);
         throw new Error("Invalid email or password");
     }
@@ -107,7 +114,6 @@ const login = asyncHandler(async (req, res) => {
         }
     }
 
-    // Role Normalization داخل التوكين
     const normalizedRole = (foundUser.role || "user").toLowerCase();
 
     const accessToken = jwt.sign(
@@ -207,7 +213,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
     const hashedOtp = await bcrypt.hash(otpCode, 10);
 
     await OTP.deleteMany({ email: cleanEmail });
-    await OTP.create({ email: cleanEmail, otp: otpCode });
+    // FIX: حفظ الـ Hashed OTP في الداتا بيز للحماية وللتوافق مع bcrypt.compare
+    await OTP.create({ email: cleanEmail, otp: hashedOtp });
 
     await sendEmail({
         email: user.email,
@@ -236,7 +243,7 @@ const resetPassword = asyncHandler(async (req, res) => {
         throw new Error("Invalid or expired OTP code");
     }
 
-    const isValidOtp = await bcrypt.compare(otp, otpRecord.otp);
+    const isValidOtp = await bcrypt.compare(String(otp), otpRecord.otp);
     if (!isValidOtp) {
         res.status(400);
         throw new Error("Invalid OTP code");
