@@ -16,7 +16,6 @@ const validateObjectId = require("../middleware/validateObjectId");
 const { validateUpdateUser } = require("../middleware/userValidation");
 const { apiLimiter } = require("../middleware/rateLimiters");
 
-// حماية جميع المسارات بالـ JWT
 router.use(verifyJWT);
 
 // 1. عرض جميع المستخدمين (Admin Only)
@@ -38,8 +37,8 @@ router.route("/:id")
         getUserById
     )
     .patch(
+        verifyOwnershipOrAdmin((req) => req.params.id), // تقديم فحص الصلاحيات والملكية أولاً
         validateUpdateUser, 
-        verifyOwnershipOrAdmin((req) => req.params.id), 
         updateUser
     )
     .delete(

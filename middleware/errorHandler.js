@@ -4,7 +4,12 @@ const asyncHandler = (fn) => (req, res, next) => {
 
 const globalErrorHandler = (err, req, res, next) => {
     let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-    let message = err.message || "Internal Server Error";
+    
+    // إخفاء التفاصيل في بيئة الإنتاج لأخطاء السيرفر الداخلي
+    const isDev = process.env.NODE_ENV === "development";
+    let message = (statusCode === 500 && !isDev)
+        ? "Internal Server Error"
+        : (err.message || "Internal Server Error");
 
     if (err.name === "CastError") {
         statusCode = 400;
@@ -13,7 +18,7 @@ const globalErrorHandler = (err, req, res, next) => {
 
     if (err.code === 11000) {
         statusCode = 409;
-        const field = Object.keys(err.keyValue)[0];
+        const field = Object.keys(err.keyValue || {})[0] || "field";
         message = `Duplicate field value entered for: ${field}`;
     }
 
@@ -21,9 +26,6 @@ const globalErrorHandler = (err, req, res, next) => {
         statusCode = 400;
         message = Object.values(err.errors).map(val => val.message).join(", ");
     }
-
-    // إخفاء الـ Stack Trace تماماً إلا إذا كانت البيئة محددة كـ development صراحة
-    const isDev = process.env.NODE_ENV === "development";
 
     return res.status(statusCode).json({
         status: "error",

@@ -11,7 +11,9 @@ const getUserIdFromReq = (req) => {
 
 // 1. Get All Users (Admin Only)
 const getAllUsers = asyncHandler(async (req, res) => {
-    const users = await User.find().select("-password -twoFactorSecret -tempTwoFactorSecret").lean();
+    const users = await User.find()
+        .select("-password -twoFactorSecret -tempTwoFactorSecret")
+        .lean();
 
     return res.status(200).json({
         status: "success",
@@ -29,7 +31,9 @@ const getUserById = asyncHandler(async (req, res) => {
         throw new Error("Invalid User ID format");
     }
 
-    const user = await User.findById(id).select("-password -twoFactorSecret -tempTwoFactorSecret").lean();
+    const user = await User.findById(id)
+        .select("-password -twoFactorSecret -tempTwoFactorSecret")
+        .lean();
 
     if (!user) {
         res.status(404);
@@ -51,6 +55,15 @@ const updateUser = asyncHandler(async (req, res) => {
         throw new Error("Invalid User ID format");
     }
 
+    // علاج ثغرة الـ IDOR: التأكد أن صاحب الحساب نفسه أو Admin هو من يجري التعديل
+    const currentUserId = getUserIdFromReq(req);
+    const currentUserRole = req.user?.role;
+
+    if (id !== currentUserId && currentUserRole !== "admin") {
+        res.status(403);
+        throw new Error("Forbidden: You are not authorized to update this profile");
+    }
+
     const allowedUpdates = {};
     if (req.body.first_name) allowedUpdates.first_name = String(req.body.first_name).trim();
     if (req.body.last_name) allowedUpdates.last_name = String(req.body.last_name).trim();
@@ -65,27 +78,41 @@ const updateUser = asyncHandler(async (req, res) => {
         allowedUpdates.email = cleanEmail;
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
-        id,
-        allowedUpdates,
-        { new: true, runValidators: true }
-    ).select("-password -twoFactorSecret -tempTwoFactorSecret");
+    try {
+        const updatedUser = await User.findByIdAndUpdate(
+            id,
+            allowedUpdates,
+            { new: true, runValidators: true }
+        ).select("-password -twoFactorSecret -tempTwoFactorSecret");
 
-    if (!updatedUser) {
-        res.status(404);
-        throw new Error("User not found");
+        if (!updatedUser) {
+            res.status(404);
+            throw new Error("User not found");
+        }
+
+        return res.status(200).json({
+            status: "success",
+            data: updatedUser
+        });
+    } catch (error) {
+        // حماية أضافية من الـ Race Conditions للـ Unique Email
+        if (error.code === 11000) {
+            res.status(409);
+            throw new Error("Email address is already in use by another account");
+        }
+        throw error;
     }
-
-    return res.status(200).json({
-        status: "success",
-        data: updatedUser
-    });
 });
 
 // 4. Change User Role (Admin Only)
 const changeUserRole = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400);
+        throw new Error("Invalid User ID format");
+    }
 
     if (!role) {
         res.status(400);

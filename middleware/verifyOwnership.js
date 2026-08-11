@@ -4,17 +4,20 @@ const verifyOwnershipOrAdmin = (getTargetUserIdFn) => {
             return res.status(401).json({ status: "fail", message: "Unauthorized" });
         }
 
-        const targetUserId = getTargetUserIdFn(req);
-        const currentUserId = req.user.id.toString();
+        const rawTargetId = getTargetUserIdFn(req);
+        // التقط المعرف سواء كان ObjectId مجرد أو Object مأهول بـ populate
+        const targetUserId = rawTargetId?._id ? rawTargetId._id.toString() : rawTargetId?.toString();
+        
+        const currentUserId = req.user.id?.toString() || req.user._id?.toString() || req.user.toString();
         const currentUserRole = req.user.role;
 
-        const isOwner = currentUserId === targetUserId?.toString();
+        const isOwner = currentUserId === targetUserId;
         const isAdmin = currentUserRole === "admin";
 
         if (!isOwner && !isAdmin) {
             return res.status(403).json({
                 status: "fail",
-                message: "Access Denied: You can only manage your own profile"
+                message: "Access Denied: You can only manage your own profile or resources"
             });
         }
 

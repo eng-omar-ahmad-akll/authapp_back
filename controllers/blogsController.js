@@ -4,7 +4,7 @@ const { asyncHandler } = require("../middleware/errorHandler");
 const sanitizeHtml = require("sanitize-html");
 
 const getUserIdFromReq = (req) => {
-    return req.user?.id || req.user?._id || req.user;
+    return req.user?.id || req.user?._id?.toString() || req.user;
 };
 
 // خيارات تطهير الـ HTML المسموح بها في المقالات (حماية من Stored XSS)
@@ -33,13 +33,16 @@ const getAllBlogs = asyncHandler(async (req, res) => {
         query = { $text: { $search: search } };
     }
 
-    const blogs = await Blog.find(query)
-        .populate("author", "first_name last_name email role")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
-
-    const total = await Blog.countDocuments(query);
+    // تنفيذ الاستعلامات بالتوازي لتخفيض زمن الاستجابة (Latency Optimization)
+    const [blogs, total] = await Promise.all([
+        Blog.find(query)
+            .populate("author", "first_name last_name email role")
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+        Blog.countDocuments(query)
+    ]);
 
     return res.status(200).json({
         status: "success",
@@ -60,7 +63,9 @@ const getBlogById = asyncHandler(async (req, res) => {
         throw new Error("Invalid Blog ID format");
     }
 
-    const blog = await Blog.findById(id).populate("author", "first_name last_name email role");
+    const blog = await Blog.findById(id)
+        .populate("author", "first_name last_name email role")
+        .lean();
 
     if (!blog) {
         res.status(404);

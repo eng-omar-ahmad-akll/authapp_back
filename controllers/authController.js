@@ -262,6 +262,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
 });
 
 // 6. Reset Password (حظر Brute-force وتحديث passwordChangedAt)
+// ... باقي الاستدعاءات كما هي
+
 const resetPassword = asyncHandler(async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
@@ -271,24 +273,21 @@ const resetPassword = asyncHandler(async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    const otpRecord = await OTP.findOne({ email: cleanEmail });
     
+    // زيادة محاولات الـ OTP بعملية ذرية (Atomic Operation) لمنع الـ Race Conditions
+    const otpRecord = await OTP.findOneAndUpdate(
+        { email: cleanEmail, attempts: { $lt: 5 } },
+        { $inc: { attempts: 1 } },
+        { new: true }
+    );
+
     if (!otpRecord) {
         res.status(400);
-        throw new Error("Invalid or expired OTP code");
-    }
-
-    // التحقق من الحد الأقصى للمحاولات الفاشلة أولاً
-    if (otpRecord.attempts >= 5) {
-        await OTP.deleteOne({ _id: otpRecord._id });
-        res.status(429);
-        throw new Error("Too many failed attempts. Please request a new OTP.");
+        throw new Error("Invalid/expired OTP code, or max attempts exceeded. Please request a new code.");
     }
 
     const isValidOtp = await otpRecord.compareOTP(String(otp));
     if (!isValidOtp) {
-        otpRecord.attempts = (otpRecord.attempts || 0) + 1;
-        await otpRecord.save();
         res.status(400);
         throw new Error("Invalid OTP code");
     }
@@ -300,7 +299,7 @@ const resetPassword = asyncHandler(async (req, res) => {
     }
 
     user.password = newPassword;
-    await user.save(); // يطلق pre("save") ويحدث passwordChangedAt تلقائياً
+    await user.save();
 
     await OTP.deleteOne({ _id: otpRecord._id });
 
@@ -309,6 +308,7 @@ const resetPassword = asyncHandler(async (req, res) => {
         message: "Password reset successfully"
     });
 });
+
 
 // 7. Setup 2FA
 const setup2FA = asyncHandler(async (req, res) => {
