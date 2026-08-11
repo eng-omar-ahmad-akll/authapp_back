@@ -8,7 +8,7 @@ const otpSchema = new mongoose.Schema(
             required: [true, "Email is required for OTP"], 
             lowercase: true,
             trim: true,
-            index: true // تحسين سرعة الاستعلام عن الـ OTP الخاص ببريد معين
+            index: true
         },
         otp: { 
             type: String, 
@@ -16,21 +16,18 @@ const otpSchema = new mongoose.Schema(
         },
         attempts: {
             type: Number,
-            default: 0,
-            max: [5, "Maximum OTP verification attempts exceeded"] // حماية من الـ Brute-force
+            default: 0
         },
         createdAt: { 
             type: Date, 
             default: Date.now, 
-            expires: 600 // حذف تلقائي بعد 10 دقائق من إنشائه (600 ثانية)
+            expires: 600
         }
     },
-    {
-        timestamps: false
-    }
+    { timestamps: false }
 );
 
-// Hashing الـ OTP تلقائياً قبل حفظه في قاعدة البيانات
+// التشفير يحدث فقط عند تعديل حقل otp لمنع Re-hashing عند زيادة المحاولات
 otpSchema.pre("save", async function (next) {
     if (!this.isModified("otp")) return next();
 
@@ -43,7 +40,6 @@ otpSchema.pre("save", async function (next) {
     }
 });
 
-// دالة مخصصة للتحقق من صحة الـ OTP المدخل مقارنة بالـ Hashed OTP
 otpSchema.methods.compareOTP = async function (candidateOTP) {
     return await bcrypt.compare(candidateOTP, this.otp);
 };

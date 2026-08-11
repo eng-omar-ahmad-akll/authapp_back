@@ -16,7 +16,6 @@ const verifyJWT = (req, res, next) => {
         }
 
         try {
-            // التحقق من وجود المستخدم وتاريخ تغيير كلمة المرور لإبطال التوكنات القديمة
             const user = await User.findById(decoded.UserInfo.id).select("+passwordChangedAt");
             if (!user) {
                 return res.status(401).json({ status: "fail", message: "Unauthorized - User no longer exists" });

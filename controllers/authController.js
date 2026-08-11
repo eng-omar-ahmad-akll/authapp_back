@@ -9,7 +9,7 @@ const OTP = require("../models/OTP");
 const sendEmail = require("../config/sendEmail");
 const { asyncHandler } = require("../middleware/errorHandler");
 
-// 1. Register User
+// 1. Register User (إجابة موحدة للوقاية من User Enumeration)
 const register = asyncHandler(async (req, res) => {
     const { first_name, last_name, email, password } = req.body;
     if (!email || !password) {
@@ -94,7 +94,6 @@ const login = asyncHandler(async (req, res) => {
         throw new Error("Invalid email or password");
     }
 
-    // إحكام التحقق من الـ 2FA ومنع إصدار التوكين عند غياب الكود
     if (foundUser.isTwoFactorEnabled) {
         if (rawCode === undefined || rawCode === null || String(rawCode).trim() === "") {
             return res.status(401).json({
@@ -153,7 +152,7 @@ const login = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Refresh Access Token
+// 3. Refresh Access Token (تطبيق RTR وإبطال الجلسات عند تغيير كلمة السر)
 const refresh = asyncHandler(async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) {
@@ -171,23 +170,43 @@ const refresh = asyncHandler(async (req, res) => {
         throw new Error("Forbidden - Invalid Refresh Token");
     }
 
-    const foundUser = await User.findById(decoded.UserInfo.id).exec();
+    const foundUser = await User.findById(decoded.UserInfo.id).select("+passwordChangedAt").exec();
     if (!foundUser) {
         res.status(401);
         throw new Error("Unauthorized - User Not Found");
     }
 
+    if (foundUser.changedPasswordAfter && foundUser.changedPasswordAfter(decoded.iat)) {
+        res.clearCookie("jwt", { httpOnly: true, secure: true, sameSite: "None" });
+        res.status(401);
+        throw new Error("Unauthorized - Password recently changed. Please log in again.");
+    }
+
     const normalizedRole = (foundUser.role || "user").toLowerCase();
 
-    const accessToken = jwt.sign(
+    // Refresh Token Rotation (RTR)
+    const newAccessToken = jwt.sign(
         { UserInfo: { id: foundUser._id, role: normalizedRole } },
         process.env.ACCESS_TOKEN_SECRET,
         { expiresIn: "15m" }
     );
 
+    const newRefreshToken = jwt.sign(
+        { UserInfo: { id: foundUser._id } },
+        process.env.REFRESH_TOKEN_SECRET,
+        { expiresIn: "7d" }
+    );
+
+    res.cookie("jwt", newRefreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "None",
+        maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
     return res.json({ 
         status: "success",
-        accessToken,
+        accessToken: newAccessToken,
         role: normalizedRole 
     });
 });
@@ -208,7 +227,7 @@ const logout = asyncHandler(async (req, res) => {
     return res.status(200).json({ status: "success", message: "Cookie cleared successfully" });
 });
 
-// 5. Forgot Password
+// 5. Forgot Password (منع User Enumeration)
 const forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
 
@@ -218,10 +237,14 @@ const forgotPassword = asyncHandler(async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
+    const genericResponse = {
+        status: "success",
+        message: "If that email is registered, an OTP code has been sent to your email."
+    };
+
     const user = await User.findOne({ email: cleanEmail }).exec();
     if (!user) {
-        res.status(404);
-        throw new Error("User with this email does not exist");
+        return res.status(200).json(genericResponse);
     }
 
     const otpCode = crypto.randomInt(100000, 1000000).toString();
@@ -235,13 +258,10 @@ const forgotPassword = asyncHandler(async (req, res) => {
         message: `Your password reset code is: ${otpCode}. It is valid for 10 minutes.`
     });
 
-    return res.status(200).json({
-        status: "success",
-        message: "OTP code sent to your email successfully"
-    });
+    return res.status(200).json(genericResponse);
 });
 
-// 6. Reset Password
+// 6. Reset Password (حظر Brute-force وتحديث passwordChangedAt)
 const resetPassword = asyncHandler(async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
@@ -252,9 +272,17 @@ const resetPassword = asyncHandler(async (req, res) => {
 
     const cleanEmail = email.toLowerCase().trim();
     const otpRecord = await OTP.findOne({ email: cleanEmail });
+    
     if (!otpRecord) {
         res.status(400);
         throw new Error("Invalid or expired OTP code");
+    }
+
+    // التحقق من الحد الأقصى للمحاولات الفاشلة أولاً
+    if (otpRecord.attempts >= 5) {
+        await OTP.deleteOne({ _id: otpRecord._id });
+        res.status(429);
+        throw new Error("Too many failed attempts. Please request a new OTP.");
     }
 
     const isValidOtp = await otpRecord.compareOTP(String(otp));
@@ -272,7 +300,7 @@ const resetPassword = asyncHandler(async (req, res) => {
     }
 
     user.password = newPassword;
-    await user.save();
+    await user.save(); // يطلق pre("save") ويحدث passwordChangedAt تلقائياً
 
     await OTP.deleteOne({ _id: otpRecord._id });
 
@@ -296,7 +324,6 @@ const setup2FA = asyncHandler(async (req, res) => {
         name: `App (${user.email})`
     });
 
-    // استخدام حقل مؤقت حتى يتسنى التحقق منه أولاً لمنع تعطيل الحساب السليم
     user.tempTwoFactorSecret = secret.base32;
     await user.save();
 

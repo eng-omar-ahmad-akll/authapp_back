@@ -7,7 +7,7 @@ const getUserIdFromReq = (req) => {
     return req.user?.id || req.user?._id || req.user;
 };
 
-// خيارات تطهير الـ HTML المسموح بها في المقالات
+// خيارات تطهير الـ HTML المسموح بها في المقالات (حماية من Stored XSS)
 const sanitizeOptions = {
     allowedTags: sanitizeHtml.defaults.allowedTags.concat([
         "img", "h1", "h2", "h3", "u", "s", "code", "pre", "blockquote", "span"
@@ -21,12 +21,12 @@ const sanitizeOptions = {
     allowedSchemes: ["http", "https", "mailto", "data"]
 };
 
-// 1. Get All Blogs (مفتوح للجميع)
+// 1. Get All Blogs
 const getAllBlogs = asyncHandler(async (req, res) => {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10)); // تقييد الـ limit لمنع DoS
     const skip = (page - 1) * limit;
-    const search = req.query.search || "";
+    const search = req.query.search ? String(req.query.search).trim() : "";
 
     let query = {};
     if (search) {
@@ -51,7 +51,7 @@ const getAllBlogs = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Get Single Blog (مفتوح للجميع)
+// 2. Get Single Blog
 const getBlogById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -73,7 +73,7 @@ const getBlogById = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Create Blog (حصري لـ Author و Admin)
+// 3. Create Blog
 const createBlog = asyncHandler(async (req, res) => {
     const { title, content, tags } = req.body;
     const userId = getUserIdFromReq(req);
@@ -83,13 +83,17 @@ const createBlog = asyncHandler(async (req, res) => {
         throw new Error("User authentication required");
     }
 
-    // تطهير محتوى المقال لحماية النظام من Stored XSS
-    const cleanContent = content ? sanitizeHtml(content, sanitizeOptions) : content;
+    if (!title || !content) {
+        res.status(400);
+        throw new Error("Title and content are required");
+    }
+
+    const cleanContent = sanitizeHtml(content, sanitizeOptions);
 
     const newBlog = await Blog.create({
-        title,
+        title: String(title).trim(),
         content: cleanContent,
-        tags,
+        tags: Array.isArray(tags) ? tags.map(t => String(t).trim()) : [],
         author: userId
     });
 
@@ -99,19 +103,20 @@ const createBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. Update Blog (لـ Author صاحب المقال أو Admin)
+// 4. Update Blog
 const updateBlog = asyncHandler(async (req, res) => {
     const blog = req.blog;
     const { title, content, tags } = req.body;
 
-    if (title !== undefined) blog.title = title;
+    if (title !== undefined) blog.title = String(title).trim();
     
-    // تطهير المحتوى المحدث قبل الحفظ
     if (content !== undefined) {
         blog.content = sanitizeHtml(content, sanitizeOptions);
     }
 
-    if (tags !== undefined) blog.tags = tags;
+    if (tags !== undefined) {
+        blog.tags = Array.isArray(tags) ? tags.map(t => String(t).trim()) : [];
+    }
 
     const updatedBlog = await blog.save();
 
@@ -121,7 +126,7 @@ const updateBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. Delete Blog (لـ Author صاحب المقال أو Admin)
+// 5. Delete Blog
 const deleteBlog = asyncHandler(async (req, res) => {
     const blog = req.blog;
     await blog.deleteOne();

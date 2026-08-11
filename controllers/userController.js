@@ -2,9 +2,16 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const { asyncHandler } = require("../middleware/errorHandler");
 
+// استخراج الـ ID بشكل موحد وآمن
+const getUserIdFromReq = (req) => {
+    if (!req.user) return null;
+    if (typeof req.user === "string") return req.user;
+    return req.user.id || req.user._id?.toString();
+};
+
 // 1. Get All Users (Admin Only)
 const getAllUsers = asyncHandler(async (req, res) => {
-    const users = await User.find().select("-password -twoFactorSecret").lean();
+    const users = await User.find().select("-password -twoFactorSecret -tempTwoFactorSecret").lean();
 
     return res.status(200).json({
         status: "success",
@@ -13,7 +20,7 @@ const getAllUsers = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Get User By ID (Owner or Admin)
+// 2. Get User By ID
 const getUserById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -22,7 +29,7 @@ const getUserById = asyncHandler(async (req, res) => {
         throw new Error("Invalid User ID format");
     }
 
-    const user = await User.findById(id).select("-password -twoFactorSecret").lean();
+    const user = await User.findById(id).select("-password -twoFactorSecret -tempTwoFactorSecret").lean();
 
     if (!user) {
         res.status(404);
@@ -35,7 +42,7 @@ const getUserById = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Update User Profile Info (Owner or Admin)
+// 3. Update User Profile Info
 const updateUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -45,23 +52,24 @@ const updateUser = asyncHandler(async (req, res) => {
     }
 
     const allowedUpdates = {};
-    if (req.body.first_name) allowedUpdates.first_name = req.body.first_name;
-    if (req.body.last_name) allowedUpdates.last_name = req.body.last_name;
+    if (req.body.first_name) allowedUpdates.first_name = String(req.body.first_name).trim();
+    if (req.body.last_name) allowedUpdates.last_name = String(req.body.last_name).trim();
 
     if (req.body.email) {
-        const emailExists = await User.findOne({ email: req.body.email, _id: { $ne: id } });
+        const cleanEmail = String(req.body.email).toLowerCase().trim();
+        const emailExists = await User.findOne({ email: cleanEmail, _id: { $ne: id } });
         if (emailExists) {
             res.status(409);
             throw new Error("Email address is already in use by another account");
         }
-        allowedUpdates.email = req.body.email;
+        allowedUpdates.email = cleanEmail;
     }
 
     const updatedUser = await User.findByIdAndUpdate(
         id,
         allowedUpdates,
         { new: true, runValidators: true }
-    ).select("-password -twoFactorSecret");
+    ).select("-password -twoFactorSecret -tempTwoFactorSecret");
 
     if (!updatedUser) {
         res.status(404);
@@ -74,7 +82,7 @@ const updateUser = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. Change User Role (Admin Only Endpoint)
+// 4. Change User Role (Admin Only)
 const changeUserRole = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
@@ -84,14 +92,13 @@ const changeUserRole = asyncHandler(async (req, res) => {
         throw new Error("Role field is required");
     }
 
-    const normalizedRole = role.toLowerCase().trim();
+    const normalizedRole = String(role).toLowerCase().trim();
     if (!["user", "author", "admin"].includes(normalizedRole)) {
         res.status(400);
         throw new Error("Invalid role type. Allowed roles: user, author, admin");
     }
 
-    // حماية الأدمن من سلب صلاحيات نفسه أو تغيير رتبته بنفسه
-    const currentAdminId = (req.user?.id || req.user)?._id?.toString() || (req.user?.id || req.user)?.toString();
+    const currentAdminId = getUserIdFromReq(req);
     if (id === currentAdminId) {
         res.status(400);
         throw new Error("Security Alert: You cannot change your own admin role");
@@ -126,8 +133,7 @@ const deleteUser = asyncHandler(async (req, res) => {
         throw new Error("Invalid User ID format");
     }
 
-    // منع الأدمن من حذف حسابه عن طريق الخطأ
-    const currentAdminId = (req.user?.id || req.user)?._id?.toString() || (req.user?.id || req.user)?.toString();
+    const currentAdminId = getUserIdFromReq(req);
     if (id === currentAdminId) {
         res.status(400);
         throw new Error("Security Alert: You cannot delete your own admin account");

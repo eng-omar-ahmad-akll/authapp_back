@@ -14,8 +14,8 @@ const userSchema = new mongoose.Schema(
             type: String,
             required: [true, "Last name is required"],
             trim: true,
-            minlength: [2, "First name must be at least 2 characters"],
-            maxlength: [30, "First name cannot exceed 30 characters"]
+            minlength: [2, "Last name must be at least 2 characters"],
+            maxlength: [30, "Last name cannot exceed 30 characters"]
         },
         email: {
             type: String,
@@ -40,6 +40,11 @@ const userSchema = new mongoose.Schema(
             default: null,
             select: false
         },
+        tempTwoFactorSecret: {
+            type: String,
+            default: null,
+            select: false
+        },
         isTwoFactorEnabled: {
             type: Boolean,
             default: false
@@ -55,6 +60,7 @@ const userSchema = new mongoose.Schema(
             transform(doc, ret) {
                 delete ret.password;
                 delete ret.twoFactorSecret;
+                delete ret.tempTwoFactorSecret;
                 delete ret.passwordChangedAt;
                 delete ret.__v;
                 return ret;
@@ -63,7 +69,6 @@ const userSchema = new mongoose.Schema(
     }
 );
 
-// تشفير كلمة المرور وتحديث تاريخ التغيير
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
 
@@ -71,9 +76,8 @@ userSchema.pre("save", async function (next) {
         const salt = await bcrypt.genSalt(10);
         this.password = await bcrypt.hash(this.password, salt);
 
-        // إذا لم يكن المستند جديداً (تعديل كلمة مرور حساب قائم)
         if (!this.isNew) {
-            this.passwordChangedAt = Date.now() - 1000; // خصم ثانية لتجنب تأخير إصدار التوكن
+            this.passwordChangedAt = Date.now() - 1000;
         }
 
         next();
@@ -86,7 +90,6 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// فحص هل تم تغيير كلمة المرور بعد إصدار التوكن أم لا
 userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
     if (this.passwordChangedAt) {
         const changedTimestamp = parseInt(this.passwordChangedAt.getTime() / 1000, 10);
