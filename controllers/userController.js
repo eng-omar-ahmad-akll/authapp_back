@@ -2,8 +2,8 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const { asyncHandler } = require("../middleware/errorHandler");
 
-// 1. Get All Users (استبعاد كلمة السر وسر الـ 2FA)
-const getallusers = asyncHandler(async (req, res) => {
+// 1. Get All Users
+const getAllUsers = asyncHandler(async (req, res) => {
     const users = await User.find().select("-password -twoFactorSecret").lean();
 
     return res.status(200).json({
@@ -13,7 +13,7 @@ const getallusers = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Get User By ID (استبعاد كلمة السر وسر الـ 2FA)
+// 2. Get User By ID
 const getUserById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -35,7 +35,7 @@ const getUserById = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Update User Info (First Name / Last Name / Email)
+// 3. Update User Info (مع معالجة الـ Role Normalization للـ Admin فقط)
 const updateUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -44,12 +44,15 @@ const updateUser = asyncHandler(async (req, res) => {
         throw new Error("Invalid User ID format");
     }
 
-    // السماح بتحديث حقول محددة فقط (منع Mass Assignment)
     const allowedUpdates = {};
     if (req.body.first_name) allowedUpdates.first_name = req.body.first_name;
     if (req.body.last_name) allowedUpdates.last_name = req.body.last_name;
     
-    // فحص الإيميل إذا كان يتحدث لمنع تكراره بـ Error نضيف
+    // توحيد الحروف للـ Role لو الـ Admin هو اللي بيعدل
+    if (req.body.role && req.user?.role?.toLowerCase() === "admin") {
+        allowedUpdates.role = req.body.role.toLowerCase();
+    }
+
     if (req.body.email) {
         const emailExists = await User.findOne({ email: req.body.email, _id: { $ne: id } });
         if (emailExists) {
@@ -101,7 +104,7 @@ const deleteUser = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
-    getallusers,
+    getAllUsers,
     getUserById,
     updateUser,
     deleteUser

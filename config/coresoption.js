@@ -1,15 +1,19 @@
-const allowedOrigins = require("./allowedorigin"); // المسار الصحيح
+const allowedOrigins = require("./allowedorigin");
 
 const corsOptions = {
     origin: (origin, callback) => {
-        if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-        callback(null, true);
+        // السماح بالـ Non-browser requests (!origin) فقط في التطوير والتست لتجنب الـ Bypassing في Production
+        const isAllowedOrigin = allowedOrigins.includes(origin);
+        const isNonBrowserInDev = !origin && process.env.NODE_ENV !== "production";
+
+        if (isAllowedOrigin || isNonBrowserInDev) {
+            callback(null, true);
         } else {
-        callback(new Error("Not allowed by CORS"));
+            callback(new Error("Not allowed by CORS policy"));
         }
     },
     credentials: true,
-    optionsSuccessStatus: 200,
+    optionsSuccessStatus: 200
 };
 
 module.exports = corsOptions;

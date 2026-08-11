@@ -45,7 +45,7 @@ const blogSchema = new mongoose.Schema(
 blogSchema.index({ author: 1, createdAt: -1 });
 blogSchema.index({ createdAt: -1 });
 
-// 2. تسريع البحث النصي Full-Text Search في العنوان والـ Tags
-blogSchema.index({ title: "text", tags: "text" });
+// تحسين البحث النصي ليشمل المحتوى أيضاً
+blogSchema.index({ title: "text", tags: "text", content: "text" });
 
 module.exports = mongoose.model("Blog", blogSchema);

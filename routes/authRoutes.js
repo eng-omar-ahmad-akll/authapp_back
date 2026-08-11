@@ -10,36 +10,36 @@ const {
     validateResetPassword 
 } = require("../middleware/authValidation");
 
-// استيراد الـ Rate Limiters التخصصية لحماية مسارات Auth
 const { 
     authLimiter, 
     loginLimiter, 
-    otpLimiter 
+    otpLimiter,
+    apiLimiter 
 } = require("../middleware/rateLimiters");
 
-// 1. تسجيل الحساب وتسجيل الدخول (محمية من الـ Brute-Force)
+// 1. التسجيل والدخول
 router.route("/register")
     .post(authLimiter, validateRegister, authController.register);
 
 router.route("/login")
     .post(loginLimiter, validateLogin, authController.login);
 
-// 2. تحديث وإلغاء الـ Tokens (استخدام POST للـ Refresh بدلاً من GET)
+// 2. Refresh & Logout
 router.route("/refresh")
-    .post(authController.refresh);
+    .post(apiLimiter, authController.refresh);
 
 router.route("/logout")
     .post(authController.logout);
 
-// 3. مسارات استعادة كلمة السر (محمية من الـ Mail Spamming والـ Brute-Force)
+// 3. Password Reset
 router.route("/forgot-password")
     .post(otpLimiter, validateForgotPassword, authController.forgotPassword);
 
 router.route("/reset-password")
     .post(otpLimiter, validateResetPassword, authController.resetPassword);
 
-// 4. مسارات 2FA (تتطلب Token موثوق + حماية من تخمين أرقام الـ TOTP الـ 6)
-router.use(verifyJWT); // تطبيق الـ JWT Middleware على جميع المسارات التالية تلقائياً
+// 4. 2FA Routes
+router.use(verifyJWT);
 
 router.route("/2fa/setup")
     .post(authController.setup2FA);

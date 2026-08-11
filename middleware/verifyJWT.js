@@ -3,7 +3,6 @@ const jwt = require("jsonwebtoken");
 const verifyJwt = (req, res, next) => {
     const authHeader = req.headers.authorization || req.headers.Authorization;
 
-    // 1. التحقق من وجود الهيدر وصحة التنسيق
     if (!authHeader || typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({
             status: "fail",
@@ -20,10 +19,8 @@ const verifyJwt = (req, res, next) => {
         });
     }
 
-    // 2. التحقق من صحة وصلاحية التوكين
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
         if (err) {
-            // إرجاع 401 في حالة انتهاء الصلاحية أو عدم صحة التوكين لتمكين الـ Client من الـ Refresh
             return res.status(401).json({
                 status: "fail",
                 message: err.name === "TokenExpiredError" 
@@ -32,7 +29,6 @@ const verifyJwt = (req, res, next) => {
             });
         }
 
-        // 3. التحقق الأمني من وجود structure الـ Payload لتجنب App Crashes
         const userInfo = decoded?.UserInfo || decoded;
         const userId = userInfo?.id || userInfo?._id;
 
@@ -43,10 +39,16 @@ const verifyJwt = (req, res, next) => {
             });
         }
 
-        // 4. تعيين كائن المستخدم الموحد القابل للقراءة في الـ Controllers
+        // توحيد قراءة الـ role سواء كانت String أو Array لحل مشكلة الـ RBAC
+        const rawRole = userInfo.role || userInfo.roles || "user";
+        const normalizedRole = Array.isArray(rawRole) 
+            ? rawRole.map(r => String(r).toLowerCase()) 
+            : String(rawRole).toLowerCase();
+
         req.user = {
             id: userId,
-            roles: userInfo.roles || []
+            role: normalizedRole,   // للـ Controllers اللي بتطلب req.user.role
+            roles: Array.isArray(normalizedRole) ? normalizedRole : [normalizedRole] // للميدلوير المعتمد على الأراي
         };
 
         next();

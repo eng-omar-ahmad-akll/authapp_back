@@ -2,25 +2,42 @@ const mongoose = require("mongoose");
 const Blog = require("../models/Blog");
 const { asyncHandler } = require("../middleware/errorHandler");
 
-// استخراج الـ ID بأمان من التوكين
 const getUserIdFromReq = (req) => {
     return req.user?.id || req.user?._id || req.user;
 };
 
-// 1. Get All Blogs (Public)
+// 1. Get All Blogs (مع Pagination & Text Search)
 const getAllBlogs = asyncHandler(async (req, res) => {
-    const blogs = await Blog.find()
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const skip = (page - 1) * limit;
+    const search = req.query.search || "";
+
+    // بناء كائن البحث (Text Search أو Regex للعنوان)
+    let query = {};
+    if (search) {
+        query = { $text: { $search: search } };
+    }
+
+    const blogs = await Blog.find(query)
         .populate("author", "first_name last_name email")
-        .sort({ createdAt: -1 });
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit);
+
+    const total = await Blog.countDocuments(query);
 
     return res.status(200).json({
         status: "success",
         count: blogs.length,
+        total,
+        page,
+        pages: Math.ceil(total / limit),
         data: blogs
     });
 });
 
-// 2. Get Single Blog (Public)
+// 2. Get Single Blog
 const getBlogById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -42,7 +59,7 @@ const getBlogById = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Create Blog (Protected)
+// 3. Create Blog
 const createBlog = asyncHandler(async (req, res) => {
     const { title, content, tags } = req.body;
     const userId = getUserIdFromReq(req);
@@ -65,14 +82,11 @@ const createBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. Update Blog (Protected - Owner or Admin)
-// تمت الاستفادة من req.blog القادم من الـ verifyBlogOwnership middleware
+// 4. Update Blog
 const updateBlog = asyncHandler(async (req, res) => {
-    const blog = req.blog; // المقال مفحوص ومحضر جاهز من الميدلوير
-
+    const blog = req.blog;
     const { title, content, tags } = req.body;
 
-    // تحديث الحقول المسموح بها فقط بمنع Mass Assignment لتغيير الـ author
     if (title !== undefined) blog.title = title;
     if (content !== undefined) blog.content = content;
     if (tags !== undefined) blog.tags = tags;
@@ -85,11 +99,9 @@ const updateBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. Delete Blog (Protected - Owner or Admin)
-// تمت الاستفادة من req.blog القادم من الـ verifyBlogOwnership middleware
+// 5. Delete Blog
 const deleteBlog = asyncHandler(async (req, res) => {
-    const blog = req.blog; // المقال مفحوص ومحضر جاهز من الميدلوير
-
+    const blog = req.blog;
     await blog.deleteOne();
 
     return res.status(200).json({

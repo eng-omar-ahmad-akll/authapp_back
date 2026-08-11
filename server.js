@@ -18,10 +18,10 @@ const app = express();
 // Connect to Database
 connectDB();
 
-// 1. Security HTTP Headers (OWASP Recommended)
+// 1. Security HTTP Headers
 app.use(helmet());
 
-// 2. Core Parsers with Body Size Limits (Mitigates DoS Payload Attacks)
+// 2. Core Parsers with Body Size Limits
 app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(express.json({ limit: "10kb" }));
@@ -35,7 +35,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// 4. Rate Limiting على مستوى جميع طلبات الـ API
+// 4. Rate Limiting
 app.use("/api", apiLimiter);
 
 // 5. Static Files
@@ -62,10 +62,11 @@ app.use((req, res) => {
 // 8. Global Error Handler Middleware
 app.use(globalErrorHandler);
 
-// مراقبة اتصال قاعدة البيانات قبل تشغيل السيرفر في بيئة المحلي (Development)
+// تشغيل الـ Listener محلياً فقط (Local Development)
+// Vercel يتعامل مع الـ Serverless Express تلقائياً بدون الحاجة لـ app.listen
 const PORT = process.env.PORT || 5000;
 
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
     mongoose.connection.once("open", () => {
         console.log("Connected to MongoDB");
         app.listen(PORT, () => {

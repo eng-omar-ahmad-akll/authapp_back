@@ -11,8 +11,9 @@ const { asyncHandler } = require("../middleware/errorHandler");
 // 1. Register User
 const register = asyncHandler(async (req, res) => {
     const { first_name, last_name, email, password } = req.body;
+    const cleanEmail = email?.toLowerCase().trim();
 
-    const foundUser = await User.findOne({ email }).exec();
+    const foundUser = await User.findOne({ email: cleanEmail }).exec();
     if (foundUser) {
         res.status(409);
         throw new Error("User with this email already exists");
@@ -20,17 +21,19 @@ const register = asyncHandler(async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // إجبار الـ role على "user" برمجياً لحظر الـ Mass Assignment
+    // إجبار الـ role على "user" وتوحيد صيغته لحظر الـ Mass Assignment
     const user = await User.create({
         first_name,
         last_name,
-        email,
-        password: hashedPassword,
+        email: cleanEmail,
+        password,
         role: "user"
     });
 
+    const normalizedRole = user.role.toLowerCase();
+
     const accessToken = jwt.sign(
-        { UserInfo: { id: user._id, role: user.role } },
+        { UserInfo: { id: user._id, role: normalizedRole } },
         process.env.ACCESS_TOKEN_SECRET,
         { expiresIn: "15m" }
     );
@@ -53,14 +56,13 @@ const register = asyncHandler(async (req, res) => {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
-        role: user.role
+        role: normalizedRole
     });
 });
 
 // 2. Login User
 const login = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
-    
     const rawCode = req.body?.twoFactorCode || req.body?.code || req.body?.token || req.body?.totpCode;
 
     if (!email || !password) {
@@ -68,7 +70,8 @@ const login = asyncHandler(async (req, res) => {
         throw new Error("Email and password are required");
     }
 
-    const foundUser = await User.findOne({ email }).exec();
+    const cleanEmail = email.toLowerCase().trim();
+    const foundUser = await User.findOne({ email: cleanEmail }).exec();
     if (!foundUser) {
         res.status(401);
         throw new Error("Invalid email or password");
@@ -104,9 +107,11 @@ const login = asyncHandler(async (req, res) => {
         }
     }
 
-    // تضمين الـ role داخل الـ Access Token
+    // Role Normalization داخل التوكين
+    const normalizedRole = (foundUser.role || "user").toLowerCase();
+
     const accessToken = jwt.sign(
-        { UserInfo: { id: foundUser._id, role: foundUser.role } },
+        { UserInfo: { id: foundUser._id, role: normalizedRole } },
         process.env.ACCESS_TOKEN_SECRET,
         { expiresIn: "15m" }
     );
@@ -127,11 +132,11 @@ const login = asyncHandler(async (req, res) => {
     return res.status(200).json({
         accessToken,
         email: foundUser.email,
-        role: foundUser.role
+        role: normalizedRole
     });
 });
 
-// 3. Refresh Access Token (تعديل إضافة الـ role للـ Token الجديد)
+// 3. Refresh Access Token
 const refresh = asyncHandler(async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) {
@@ -155,9 +160,10 @@ const refresh = asyncHandler(async (req, res) => {
         throw new Error("Unauthorized - User Not Found");
     }
 
-    // هنا تعديل مهم جداً: تضمين الـ role في الـ Access Token الجديد
+    const normalizedRole = (foundUser.role || "user").toLowerCase();
+
     const accessToken = jwt.sign(
-        { UserInfo: { id: foundUser._id, role: foundUser.role } },
+        { UserInfo: { id: foundUser._id, role: normalizedRole } },
         process.env.ACCESS_TOKEN_SECRET,
         { expiresIn: "15m" }
     );
@@ -190,7 +196,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
         throw new Error("Email is required");
     }
 
-    const user = await User.findOne({ email }).exec();
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: cleanEmail }).exec();
     if (!user) {
         res.status(404);
         throw new Error("User with this email does not exist");
@@ -199,8 +206,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const hashedOtp = await bcrypt.hash(otpCode, 10);
 
-    await OTP.deleteMany({ email });
-    await OTP.create({ email, otp: hashedOtp });
+    await OTP.deleteMany({ email: cleanEmail });
+    await OTP.create({ email: cleanEmail, otp: otpCode });
 
     await sendEmail({
         email: user.email,
@@ -222,7 +229,8 @@ const resetPassword = asyncHandler(async (req, res) => {
         throw new Error("Email, OTP, and new password are required");
     }
 
-    const otpRecord = await OTP.findOne({ email });
+    const cleanEmail = email.toLowerCase().trim();
+    const otpRecord = await OTP.findOne({ email: cleanEmail });
     if (!otpRecord) {
         res.status(400);
         throw new Error("Invalid or expired OTP code");
@@ -234,7 +242,7 @@ const resetPassword = asyncHandler(async (req, res) => {
         throw new Error("Invalid OTP code");
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: cleanEmail });
     if (!user) {
         res.status(404);
         throw new Error("User not found");

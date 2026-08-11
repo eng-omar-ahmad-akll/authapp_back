@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const userController = require("../controllers/userController");
+const { getAllUsers, getUserById, deleteUser, updateUser } = require("../controllers/userController");
 const verifyJWT = require("../middleware/verifyJWT");
 const verifyRoles = require("../middleware/verifyRoles");
 const { verifyOwnershipOrAdmin } = require("../middleware/verifyOwnership");
@@ -9,27 +9,26 @@ const validateObjectId = require("../middleware/validateObjectId");
 const { validateUpdateUser } = require("../middleware/userValidation");
 const { apiLimiter } = require("../middleware/rateLimiters");
 
-// تطبيق الـ Authentication على جميع مسارات إدارة المستخدمين
 router.use(verifyJWT);
 
-// 1. عرض جميع المستخدمين (محصور للـ Admin ومحمي بـ Rate Limiter لمنع الـ Scraping)
-router.get("/", verifyRoles("admin"), apiLimiter, userController.getAllUsers);
+// 1. عرض جميع المستخدمين (Admin Only)
+router.get("/", verifyRoles("admin"), apiLimiter, getAllUsers);
 
-// 2. المسارات المربوطة بمعرف مستخدم محدد
+// 2. المسارات المربوطة بمعرف مستخدم
 router.route("/:id")
-    .all(validateObjectId("id")) // فحص صحة الـ Mongo ObjectId لجميع الأفعال تلقائياً
+    .all(validateObjectId("id"))
     .get(
         verifyOwnershipOrAdmin((req) => req.params.id), 
-        userController.getUserById
+        getUserById
     )
     .patch(
+        validateUpdateUser, 
         verifyOwnershipOrAdmin((req) => req.params.id), 
-        validateUpdateUser, // حماية من الـ Mass Assignment وتعديل الـ role أو الـ password
-        userController.updateUser
+        updateUser
     )
     .delete(
         verifyRoles("admin"), 
-        userController.deleteUser
+        deleteUser
     );
 
 module.exports = router;

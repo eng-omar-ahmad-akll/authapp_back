@@ -9,7 +9,6 @@ const globalErrorHandler = (err, req, res, next) => {
     let message = err.message || "Internal Server Error";
 
     // معالجة خطأ معرف Mongoose غير المكتمل أو المطبوع بخطأ (CastError)
-    // OWASP Mitigation: عدم إرجاع قيمة err.value لتجنب Reflected XSS / Injection
     if (err.name === "CastError") {
         statusCode = 400;
         message = "Invalid resource ID format";
@@ -39,11 +38,17 @@ const globalErrorHandler = (err, req, res, next) => {
         message = "Token has expired, please log in again";
     }
 
-    return res.status(statusCode).json({
+    const response = {
         status: "error",
-        message,
-        stack: process.env.NODE_ENV === "production" ? null : err.stack
-    });
+        message
+    };
+
+    // إضافة الـ stack فقط في حالة عدم وجودنا في بيئة الـ production
+    if (process.env.NODE_ENV !== "production") {
+        response.stack = err.stack;
+    }
+
+    return res.status(statusCode).json(response);
 };
 
 module.exports = {

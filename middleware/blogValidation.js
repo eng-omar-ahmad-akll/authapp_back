@@ -1,14 +1,12 @@
 const Joi = require("joi");
 
-// النمط المخصص لمنع رموز الـ NoSQL Injection وأقواس XSS المباشرة
 const safeStringPattern = /^[^$<>{}\\]*$/;
 
 const options = {
-    abortEarly: false,     // إرجاع كافة أخطاء المدخلات دفعة واحدة
-    stripUnknown: true     // OWASP Mitigation: حظر وحذف الحقول غير المعروفة (Mass Assignment)
+    abortEarly: false,
+    stripUnknown: true
 };
 
-// 1. Schema إنشاء مقال جديد
 const createBlogSchema = Joi.object({
     title: Joi.string()
         .trim()
@@ -26,7 +24,7 @@ const createBlogSchema = Joi.object({
     content: Joi.string()
         .trim()
         .min(10)
-        .max(50000) // تحديد حد أقصى لحجم المقال لمنع DoS
+        .max(50000)
         .required()
         .messages({
             "string.empty": "Content is required",
@@ -45,14 +43,13 @@ const createBlogSchema = Joi.object({
                     "string.max": "Tag cannot exceed 30 characters"
                 })
         )
-        .max(10) // منع إرسال أكثر من 10 تاجز
+        .max(10)
         .optional()
         .messages({
             "array.max": "You cannot add more than 10 tags"
         })
 });
 
-// 2. Schema تعديل مقال (يلزم إرسال حقل واحد على الأقل للتحديث)
 const updateBlogSchema = Joi.object({
     title: Joi.string()
         .trim()
@@ -96,27 +93,22 @@ const updateBlogSchema = Joi.object({
     "object.min": "At least one field (title, content, or tags) must be provided for update"
 });
 
-// Middlewares للتحقق
 const validateCreateBlog = (req, res, next) => {
     const { error, value } = createBlogSchema.validate(req.body, options);
-    
     if (error) {
         const errorsList = error.details.map((detail) => detail.message);
         return res.status(400).json({ status: "fail", errors: errorsList });
     }
-    
     req.body = value;
     next();
 };
 
 const validateUpdateBlog = (req, res, next) => {
     const { error, value } = updateBlogSchema.validate(req.body, options);
-    
     if (error) {
         const errorsList = error.details.map((detail) => detail.message);
         return res.status(400).json({ status: "fail", errors: errorsList });
     }
-    
     req.body = value;
     next();
 };
