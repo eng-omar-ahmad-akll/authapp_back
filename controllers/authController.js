@@ -2,13 +2,14 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const speakeasy = require("speakeasy");
 const QRCode = require("qrcode");
+const crypto = require("crypto");
 
 const User = require("../models/User");
 const OTP = require("../models/OTP");
 const sendEmail = require("../config/sendEmail");
 const { asyncHandler } = require("../middleware/errorHandler");
 
-// 1. Register User (تسجيل جديد - محصور بـ role: "user")
+// 1. Register User
 const register = asyncHandler(async (req, res) => {
     const { first_name, last_name, email, password } = req.body;
     if (!email || !password) {
@@ -24,7 +25,6 @@ const register = asyncHandler(async (req, res) => {
         throw new Error("User with this email already exists");
     }
 
-    // إجبار الـ role على "user" لمنع ثغرات Escalation
     const user = await User.create({
         first_name,
         last_name,
@@ -94,7 +94,6 @@ const login = asyncHandler(async (req, res) => {
         throw new Error("Invalid email or password");
     }
 
-    // التحقق من 2FA
     if (foundUser.isTwoFactorEnabled) {
         if (rawCode === undefined || rawCode === null || String(rawCode).trim() === "") {
             return res.status(403).json({
@@ -109,7 +108,7 @@ const login = asyncHandler(async (req, res) => {
             secret: foundUser.twoFactorSecret,
             encoding: "base32",
             token: cleanToken,
-            window: 6
+            window: 1
         });
 
         if (!verified) {
@@ -120,7 +119,6 @@ const login = asyncHandler(async (req, res) => {
 
     const normalizedRole = (foundUser.role || "user").toLowerCase();
 
-    // تشفير الـ ID والـ Role داخل الـ Access Token
     const accessToken = jwt.sign(
         { UserInfo: { id: foundUser._id, role: normalizedRole } },
         process.env.ACCESS_TOKEN_SECRET,
@@ -153,7 +151,7 @@ const login = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Refresh Access Token (جلب أحدث Role مباشرة من الـ DB)
+// 3. Refresh Access Token
 const refresh = asyncHandler(async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) {
@@ -179,7 +177,6 @@ const refresh = asyncHandler(async (req, res) => {
 
     const normalizedRole = (foundUser.role || "user").toLowerCase();
 
-    // أصدار Access Token جديد بالـ Role المحدث في حال قام الأدمن بتغيير رتبته
     const accessToken = jwt.sign(
         { UserInfo: { id: foundUser._id, role: normalizedRole } },
         process.env.ACCESS_TOKEN_SECRET,
@@ -225,7 +222,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
         throw new Error("User with this email does not exist");
     }
 
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // استخدام مولد أرقام عشوائي آمن مشفر (Cryptographically Secure Pseudo-Random Number Generator)
+    const otpCode = crypto.randomInt(100000, 1000000).toString();
 
     await OTP.deleteMany({ email: cleanEmail });
     await OTP.create({ email: cleanEmail, otp: otpCode });
@@ -260,7 +258,7 @@ const resetPassword = asyncHandler(async (req, res) => {
 
     const isValidOtp = await otpRecord.compareOTP(String(otp));
     if (!isValidOtp) {
-        otpRecord.attempts += 1;
+        otpRecord.attempts = (otpRecord.attempts || 0) + 1;
         await otpRecord.save();
         res.status(400);
         throw new Error("Invalid OTP code");
@@ -332,7 +330,7 @@ const verify2FA = asyncHandler(async (req, res) => {
         secret: user.twoFactorSecret,
         encoding: "base32",
         token: cleanToken,
-        window: 6
+        window: 1
     });
 
     if (!verified) {

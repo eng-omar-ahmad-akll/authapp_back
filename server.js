@@ -22,7 +22,6 @@ connectDB();
 app.use(helmet());
 
 // 2. Core Parsers with Body Size Limits
-// 💡 إضافة trust proxy قبل الـ Rate Limiters والمواجه (Middlewares)
 app.set("trust proxy", 1);
 app.use(cors(corsOptions));
 app.use(cookieParser());
@@ -64,8 +63,7 @@ app.use((req, res) => {
 // 8. Global Error Handler Middleware
 app.use(globalErrorHandler);
 
-// تشغيل الـ Listener محلياً فقط (Local Development)
-// Vercel يتعامل مع الـ Serverless Express تلقائياً بدون الحاجة لـ app.listen
+// Listener for Local Development
 const PORT = process.env.PORT || 5000;
 
 if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {

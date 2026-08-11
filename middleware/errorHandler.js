@@ -22,10 +22,13 @@ const globalErrorHandler = (err, req, res, next) => {
         message = Object.values(err.errors).map(val => val.message).join(", ");
     }
 
+    // إخفاء الـ Stack Trace تماماً إلا إذا كانت البيئة محددة كـ development صراحة
+    const isDev = process.env.NODE_ENV === "development";
+
     return res.status(statusCode).json({
         status: "error",
         message,
-        ...(process.env.NODE_ENV !== "production" && { stack: err.stack })
+        ...(isDev && { stack: err.stack })
     });
 };
 
