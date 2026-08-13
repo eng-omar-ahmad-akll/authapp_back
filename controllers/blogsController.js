@@ -1,6 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
-const Blog = require("../models/blogsSchema");
+const Blog = require("../models/Blog");
 const { uploadToCloudinary, deleteFromCloudinary } = require("../utils/cloudinary");
 
 // In-memory cache for view tracking (IP_BlogID -> Timestamp)
