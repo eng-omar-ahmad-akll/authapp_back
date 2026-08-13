@@ -1,26 +1,33 @@
 /**
- * @file Database Connection Utility
- * @description Establishes a secure and persistent connection to MongoDB using Mongoose.
+ * @file Email Dispatcher Utility
+ * @description Sends automated transaction emails (OTP, Security Alerts) via Nodemailer.
  * 
  * @author 3akl
  */
 
-const mongoose = require("mongoose");
+const nodemailer = require("nodemailer");
 
 /**
- * Connects to MongoDB cluster with singleton check and fail-safe process exits
+ * Transports email messages using standard Gmail SMTP credentials
+ * @param {Object} options - Email parameters containing target email, subject, and body text
  */
-const connectDB = async () => {
-    if (mongoose.connection.readyState >= 1) {
-        return;
-    }
-    try {
-        const conn = await mongoose.connect(process.env.MONGO_URI);
-        console.log(`MongoDB Connected: ${conn.connection.host}`);
-    } catch (error) {
-        console.error(`Database Connection Error: ${error.message}`);
-        process.exit(1); // Safely abort application process on critical database failure
-    }
+const sendEmail = async (options) => {
+    const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        }
+    });
+
+    const mailOptions = {
+        from: `Blog API Admin <${process.env.EMAIL_USER}>`,
+        to: options.email,
+        subject: options.subject,
+        text: options.message
+    };
+
+    await transporter.sendMail(mailOptions);
 };
 
-module.exports = connectDB;
+module.exports = sendEmail;
