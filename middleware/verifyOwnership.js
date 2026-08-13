@@ -1,3 +1,16 @@
+/**
+ * @file Resource Ownership / Admin Access Middleware
+ * @description Higher-Order Function dynamically resolving target resource ownership against the requesting user context.
+ * 
+ * @author 3akl
+ */
+
+/**
+ * Generates an authorization middleware matching the requester with a resource owner ID
+ * @param {Function} getTargetUserIdFn - Callback resolving target user ID from request context
+ * @returns {Function} Express Middleware
+ * @author 3akl
+ */
 const verifyOwnershipOrAdmin = (getTargetUserIdFn) => {
     return (req, res, next) => {
         if (!req.user) {

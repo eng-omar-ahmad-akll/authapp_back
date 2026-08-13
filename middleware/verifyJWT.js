@@ -1,7 +1,18 @@
+/**
+ * @file JWT Authentication Guard
+ * @description Protects routes by validating Bearer Access Tokens, revocation status, active state, and password alterations.
+ * 
+ * @author 3akl
+ */
+
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { isTokenBlacklisted } = require("../utils/tokenBlacklist");
 
+/**
+ * Middleware: Verify authorization header token and attach user identity to request object
+ * @author 3akl
+ */
 const verifyJWT = async (req, res, next) => {
     const authHeader = req.headers.authorization || req.headers.Authorization;
 
@@ -12,15 +23,12 @@ const verifyJWT = async (req, res, next) => {
     const token = authHeader.split(" ")[1];
 
     try {
-        // 1. التحقق من صحة التوكن وفك التشفير
         const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
-        // 2. التحقق من الـ Blacklist بشكل Synchronous مباشر
         if (isTokenBlacklisted(token)) {
             return res.status(401).json({ status: "fail", message: "Unauthorized - Token has been revoked" });
         }
 
-        // 3. جلب بيانات المستخدم مع الحقول الحساسة
         const user = await User.findById(decoded.UserInfo.id).select("+passwordChangedAt +isActive");
 
         if (!user) {
@@ -31,7 +39,6 @@ const verifyJWT = async (req, res, next) => {
             return res.status(401).json({ status: "fail", message: "Unauthorized - Account deactivated or banned" });
         }
 
-        // 4. التحقق من تغيير كلمة المرور بعد إصدار التوكن
         if (user.changedPasswordAfter && user.changedPasswordAfter(decoded.iat)) {
             return res.status(401).json({ status: "fail", message: "Unauthorized - Password recently changed. Please log in again." });
         }

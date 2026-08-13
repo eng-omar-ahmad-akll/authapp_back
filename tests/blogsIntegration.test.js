@@ -1,3 +1,10 @@
+/**
+ * @file Blogs Controller Integration Tests
+ * @description End-to-end CRUD flow testing for blog posts including creation, retrieval, updates, and deletion.
+ * 
+ * @author 3akl
+ */
+
 const request = require("supertest");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");

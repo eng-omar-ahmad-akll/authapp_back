@@ -1,15 +1,32 @@
+/**
+ * @file User Controller
+ * @description Administrative and Profile Management API.
+ * Handles fetching user records, profile updates, and role modifications.
+ * 
+ * @author 3akl
+ */
+
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const { asyncHandler } = require("../middleware/errorHandler");
-const { uploadToCloudinary, deleteFromCloudinary } = require("../utils/cloudinary");
 
+/**
+ * Utility function to normalize User ID string extraction from JWT Request object
+ * @param {Object} req - Express Request object
+ * @returns {string|null} User ID string
+ */
 const getUserIdFromReq = (req) => {
     if (!req.user) return null;
     if (typeof req.user === "string") return req.user;
     return req.user.id || req.user._id?.toString();
 };
 
-// 1. Get All Users (Admin Only)
+/**
+ * @route GET /api/users
+ * @desc Get all registered user accounts without sensitive credentials
+ * @access Private (Admin Only)
+ * @author 3akl
+ */
 const getAllUsers = asyncHandler(async (req, res) => {
     const users = await User.find()
         .select("-password -twoFactorSecret -tempTwoFactorSecret -refreshTokens")
@@ -22,7 +39,12 @@ const getAllUsers = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Get User By ID
+/**
+ * @route GET /api/users/:id
+ * @desc Get specific user profile details by ID
+ * @access Private (Authenticated User)
+ * @author 3akl
+ */
 const getUserById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -46,7 +68,12 @@ const getUserById = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Update User Profile Info & Avatar (Fix Bug #1: Active Account Enforcement)
+/**
+ * @route PUT /api/users/:id
+ * @desc Update user profile details (Name, Avatar direct URL)
+ * @access Private (Account Owner or Admin)
+ * @author 3akl
+ */
 const updateUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -68,7 +95,6 @@ const updateUser = asyncHandler(async (req, res) => {
         throw new Error("Email address cannot be updated via this route. Use email update verification flow.");
     }
 
-    // تم إضافة .select("+isActive") صراحة لفحص حالة الحساب المغلق
     const user = await User.findById(id).select("+isActive");
     if (!user) {
         res.status(404);
@@ -91,14 +117,12 @@ const updateUser = asyncHandler(async (req, res) => {
         isModified = true;
     }
 
-    if (req.file) {
-        if (user.avatar?.public_id) {
-            await deleteFromCloudinary(user.avatar.public_id);
-        }
-        const cloudResult = await uploadToCloudinary(req.file.buffer, "user_avatars");
+    const avatarUrlInput = req.body.avatarUrl || req.body.avatar?.url;
+
+    if (avatarUrlInput && typeof avatarUrlInput === "string") {
         user.avatar = {
-            url: cloudResult.url,
-            public_id: cloudResult.public_id
+            url: avatarUrlInput.trim(),
+            public_id: user.avatar?.public_id || `avatar_${Date.now()}`
         };
         isModified = true;
     }
@@ -123,7 +147,12 @@ const updateUser = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. Change User Role
+/**
+ * @route PATCH /api/users/:id/role
+ * @desc Modify authorization access role of a target user account
+ * @access Private (Admin Only)
+ * @author 3akl
+ */
 const changeUserRole = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { role } = req.body;
@@ -175,7 +204,12 @@ const changeUserRole = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. Delete User (مع مسح الـ Avatar إذا كان موجوداً)
+/**
+ * @route DELETE /api/users/:id
+ * @desc Permanently remove user account record from database
+ * @access Private (Admin Only)
+ * @author 3akl
+ */
 const deleteUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -195,10 +229,6 @@ const deleteUser = asyncHandler(async (req, res) => {
     if (!user) {
         res.status(404);
         throw new Error("User not found");
-    }
-
-    if (user.avatar?.public_id) {
-        await deleteFromCloudinary(user.avatar.public_id);
     }
 
     await user.deleteOne();

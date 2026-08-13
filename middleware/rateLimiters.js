@@ -1,20 +1,35 @@
+/**
+ * @file Rate Limiting Middleware
+ * @description Provides rate limiting protections against Denial of Service (DoS) and Brute-Force attacks.
+ * 
+ * @author 3akl
+ */
+
 const rateLimit = require("express-rate-limit");
 
 /**
- * الاعتماد الصارم على req.ip الذي يتكفل Express بالتحقق منه بأمان عند ضبط trust proxy
+ * Safely extracts client IP relying on validated Express req.ip
+ * @param {Object} req - Express Request
+ * @returns {string} Client IP address
  */
 const getClientIp = (req) => {
     return req.ip || req.socket.remoteAddress || "127.0.0.1";
 };
 
 /**
- * تطهير ومعايرة البريد الإلكتروني لمنع الثغرات الترتيبية ومحاولات التجاوز
+ * Normalizes email address to avoid bypass variations
+ * @param {Object} req - Express Request
+ * @returns {string} Clean lowercase email address
  */
 const getNormalizedEmail = (req) => {
     const rawEmail = req.body && typeof req.body.email === "string" ? req.body.email : "";
     return rawEmail.toLowerCase().replace(/\s+/g, "");
 };
 
+/**
+ * Global API rate limiter (100 requests per 15 mins)
+ * @author 3akl
+ */
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -27,6 +42,10 @@ const apiLimiter = rateLimit({
     legacyHeaders: false
 });
 
+/**
+ * Login endpoint rate limiter (5 attempts per IP + Email combination per 15 mins)
+ * @author 3akl
+ */
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
@@ -43,6 +62,10 @@ const loginLimiter = rateLimit({
     legacyHeaders: false
 });
 
+/**
+ * Account registration rate limiter (10 registrations per IP per hour)
+ * @author 3akl
+ */
 const authLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
     max: 10,
@@ -55,6 +78,10 @@ const authLimiter = rateLimit({
     legacyHeaders: false
 });
 
+/**
+ * Password reset / OTP request limiter (3 attempts per IP + Email combination per 15 mins)
+ * @author 3akl
+ */
 const otpLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 3,

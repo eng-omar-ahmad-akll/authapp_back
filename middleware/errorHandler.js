@@ -1,5 +1,15 @@
+/**
+ * @file Error Handling Infrastructure
+ * @description Operational AppError class, async route wrapper, and global Express error handling middleware.
+ * 
+ * @author 3akl
+ */
+
 const multer = require("multer");
 
+/**
+ * Custom Operational Application Error class extending native Error
+ */
 class AppError extends Error {
     constructor(message, statusCode) {
         super(message);
@@ -9,10 +19,21 @@ class AppError extends Error {
     }
 }
 
+/**
+ * Wrapper for async express route handlers to automatically capture rejected promises
+ * @param {Function} fn - Async express route function
+ * @returns {Function} Express middleware handler
+ * @author 3akl
+ */
 const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
 
+/**
+ * Global Error Handler Middleware
+ * Normalizes system, DB, Multer, and application errors into uniform HTTP responses.
+ * @author 3akl
+ */
 const globalErrorHandler = (err, req, res, next) => {
     let statusCode = err.statusCode || (res.statusCode === 200 ? 500 : res.statusCode);
     const isDev = process.env.NODE_ENV === "development";

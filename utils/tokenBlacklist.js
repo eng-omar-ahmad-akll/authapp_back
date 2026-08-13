@@ -1,10 +1,18 @@
+/**
+ * @file In-Memory Synchronous Token Blacklist Utility
+ * @description Provides instant revocation checking for JWTs with automatic periodic cleanup mechanisms.
+ * 
+ * @author 3akl
+ */
+
 const MAX_BLACKLIST_SIZE = 50000;
 const tokenBlacklist = new Map();
 
 /**
- * إضافة توكن إلى الـ Blacklist synchronous
+ * Adds a revoked JWT to the in-memory blacklist
  * @param {string} token 
- * @param {number} expiresInMs Default: 15 minutes
+ * @param {number} expiresInMs - Expiration duration in ms (Default: 15 mins)
+ * @author 3akl
  */
 const addTokenToBlacklist = (token, expiresInMs = 15 * 60 * 1000) => {
     if (!token || typeof token !== "string") return;
@@ -19,9 +27,10 @@ const addTokenToBlacklist = (token, expiresInMs = 15 * 60 * 1000) => {
 };
 
 /**
- * التحقق مما إذا كان التوكن مضافاً للـ Blacklist synchronous
+ * Checks synchronously whether a JWT is blacklisted
  * @param {string} token 
  * @returns {boolean}
+ * @author 3akl
  */
 const isTokenBlacklisted = (token) => {
     if (!token) return false;
@@ -35,7 +44,7 @@ const isTokenBlacklisted = (token) => {
     return true;
 };
 
-// Periodic Cleanup
+// Automatic cleanup interval every 10 minutes
 setInterval(() => {
     const now = Date.now();
     for (const [token, expiresAt] of tokenBlacklist.entries()) {

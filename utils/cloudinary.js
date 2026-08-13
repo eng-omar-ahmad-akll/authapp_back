@@ -1,3 +1,10 @@
+/**
+ * @file Cloudinary Service Utility
+ * @description Integrates Cloudinary API for stream uploads and safe deletion operations.
+ * 
+ * @author 3akl
+ */
+
 const cloudinary = require("cloudinary").v2;
 
 cloudinary.config({
@@ -7,10 +14,11 @@ cloudinary.config({
 });
 
 /**
- * Upload File Buffer to Cloudinary via Stream
- * @param {Buffer} fileBuffer
- * @param {String} folderName
- * @returns {Promise<Object>}
+ * Uploads a file buffer directly to Cloudinary using a write stream
+ * @param {Buffer} fileBuffer - In-memory file buffer
+ * @param {string} folderName - Cloudinary target directory
+ * @returns {Promise<{public_id: string, url: string}>}
+ * @author 3akl
  */
 const uploadToCloudinary = (fileBuffer, folderName) => {
     return new Promise((resolve, reject) => {
@@ -34,8 +42,9 @@ const uploadToCloudinary = (fileBuffer, folderName) => {
 };
 
 /**
- * Delete Image from Cloudinary safely
- * @param {String} publicId
+ * Deletes an existing resource from Cloudinary safely using public_id validation
+ * @param {string} publicId - Cloudinary asset public ID
+ * @author 3akl
  */
 const deleteFromCloudinary = async (publicId) => {
     try {

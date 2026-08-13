@@ -1,3 +1,10 @@
+/**
+ * @file Blog Mongoose Data Model
+ * @description Schema and index definitions for managing blog posts, search indexes, and read metrics.
+ * 
+ * @author 3akl
+ */
+
 const mongoose = require("mongoose");
 
 const blogSchema = new mongoose.Schema(
@@ -53,6 +60,7 @@ const blogSchema = new mongoose.Schema(
     }
 );
 
+// Database compound & full-text search indexes
 blogSchema.index({ tags: 1, createdAt: -1 });
 blogSchema.index({ author: 1, createdAt: -1 });
 blogSchema.index({ createdAt: -1 });

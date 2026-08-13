@@ -1,3 +1,10 @@
+/**
+ * @file Express Blog Routes
+ * @description API endpoints routing for blog CRUD operations, image verification, and permission guards.
+ * 
+ * @author 3akl
+ */
+
 const express = require("express");
 const router = express.Router();
 
@@ -10,14 +17,14 @@ const validateObjectId = require("../middleware/validateObjectId");
 const { apiLimiter } = require("../middleware/rateLimiters");
 const { uploadSingleImage, validateImageMagicBytes } = require("../middleware/uploadSecurity");
 
-// 1. المسارات العامة
+// Public endpoints
 router.get("/", apiLimiter, blogsController.getAllBlogs);
 router.get("/:id", apiLimiter, validateObjectId("id"), blogsController.getBlogById);
 
-// 2. حماية الـ Endpoints التالية بـ JWT
+// Guard endpoints with JWT
 router.use(verifyJWT);
 
-// 3. إنشاء مقال جديد
+// Post creation (Authors & Admins)
 router.post(
     "/",
     verifyRoles("author", "admin"),
@@ -27,7 +34,7 @@ router.post(
     blogsController.createBlog
 );
 
-// 4. تعديل مقال (تم تقديم verifyBlogOwnership لمنع استنزاف الموارد/Cloudinary)
+// Post update (Owner or Admin guarded before upload processing)
 router.patch(
     "/:id",
     validateObjectId("id"),
@@ -38,7 +45,7 @@ router.patch(
     blogsController.updateBlog
 );
 
-// 5. حذف مقال
+// Post deletion (Owner or Admin)
 router.delete(
     "/:id",
     validateObjectId("id"),

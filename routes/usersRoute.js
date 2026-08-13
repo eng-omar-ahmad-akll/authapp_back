@@ -1,3 +1,10 @@
+/**
+ * @file Express User Management Routes
+ * @description API endpoints routing for administrative and individual user profile management.
+ * 
+ * @author 3akl
+ */
+
 const express = require("express");
 const router = express.Router();
 
@@ -19,10 +26,9 @@ const { uploadSingleImage, validateImageMagicBytes } = require("../middleware/up
 
 router.use(verifyJWT);
 
-// 1. عرض جميع المستخدمين (Admin Only)
+// Administrative Endpoints
 router.get("/", verifyRoles("admin"), apiLimiter, getAllUsers);
 
-// 2. تعديل رتبة مستخدم (Admin Only)
 router.patch(
     "/:id/role",
     validateObjectId("id"),
@@ -30,7 +36,7 @@ router.patch(
     changeUserRole
 );
 
-// 3. مسارات المستخدم المحددة
+// Resource Owner or Admin Specific Routes
 router.route("/:id")
     .all(validateObjectId("id"))
     .get(

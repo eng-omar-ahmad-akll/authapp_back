@@ -1,3 +1,10 @@
+/**
+ * @file Rate Limiting & Global Error Handling Security Tests
+ * @description Tests anti-brute-force rate limiting defenses and prevents stack trace leakage in production.
+ * 
+ * @author 3akl
+ */
+
 const request = require("supertest");
 const app = require("../server");
 

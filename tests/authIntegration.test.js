@@ -1,12 +1,15 @@
+/**
+ * @file Auth & Middleware Integration Tests
+ * @description Verifies authorization flow, password strength validation, and MongoDB ObjectId validation.
+ * 
+ * @author 3akl
+ */
+
 const request = require("supertest");
 const mongoose = require("mongoose");
-const app = require("../server"); // استيراد تطبيق Express
+const app = require("../server");
 
 describe("Auth & Middleware Integration Tests", () => {
-
-    beforeAll(async () => {
-        // الاتصال بقاعدة بيانات اختبارية إذا لزم الأمر
-    });
 
     afterAll(async () => {
         await mongoose.connection.close();
@@ -19,7 +22,7 @@ describe("Auth & Middleware Integration Tests", () => {
                 first_name: "Omar",
                 last_name: "Akl",
                 email: "test@example.com",
-                password: "123" // كلمة سر ضعيفة
+                password: "123"
             });
         
         expect(res.statusCode).toEqual(400);
@@ -41,9 +44,4 @@ describe("Auth & Middleware Integration Tests", () => {
 
         expect(res.statusCode).toEqual(401);
     });
-});
-
-afterAll(async () => {
-    const mongoose = require("mongoose");
-    await mongoose.connection.close();
 });

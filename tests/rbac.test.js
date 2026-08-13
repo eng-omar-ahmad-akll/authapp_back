@@ -1,10 +1,16 @@
+/**
+ * @file Authentication & Role Authorization Security Tests
+ * @description Tests OWASP A07 (Identification/Authentication Failures) and OWASP A01 (Broken Access Control / RBAC).
+ * 
+ * @author 3akl
+ */
+
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const app = require("../server");
 
 describe("2. Authentication & Role Authorization Tests", () => {
 
-    // OWASP A07: Missing/Malformed Token
     test("verifyJWT - Reject request without Authorization Header", async () => {
         const res = await request(app).get("/users");
         expect(res.statusCode).toBe(401);
@@ -35,7 +41,6 @@ describe("2. Authentication & Role Authorization Tests", () => {
         expect(res.body.message).toContain("Token Expired");
     });
 
-    // OWASP A01: Privilege Escalation (verifyRoles)
     test("verifyRoles - Forbid standard User from accessing Admin routes", async () => {
         const userToken = jwt.sign(
             { UserInfo: { id: "60d5ecb8b5c9c22b1c8e1234", roles: ["user"] } },
@@ -44,7 +49,7 @@ describe("2. Authentication & Role Authorization Tests", () => {
         );
 
         const res = await request(app)
-            .get("/users") // مسار خاص بالأدمن
+            .get("/users")
             .set("Authorization", `Bearer ${userToken}`);
 
         expect(res.statusCode).toBe(403);

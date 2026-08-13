@@ -1,3 +1,10 @@
+/**
+ * @file Input Validations & OWASP Injection Security Tests
+ * @description Validates user input handling against XSS, NoSQL Injection, payload bounds, and privilege escalation via mass assignment.
+ * 
+ * @author 3akl
+ */
+
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const app = require("../server");
@@ -20,7 +27,6 @@ describe("1. Input Validations & OWASP Injection Tests", () => {
     });
 
     test("Blog Validation - Reject payload exceeding limits (Tags > 10)", async () => {
-        // إنشاء توكين وهمي لتجاوز verifyJWT
         const token = jwt.sign(
             { UserInfo: { id: "60d5ecb8b5c9c22b1c8e1234", roles: ["user"] } },
             process.env.ACCESS_TOKEN_SECRET || "secret"
@@ -58,7 +64,6 @@ describe("1. Input Validations & OWASP Injection Tests", () => {
         }
     });
 });
-
 
 afterAll(async () => {
     const mongoose = require("mongoose");

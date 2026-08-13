@@ -1,10 +1,21 @@
+/**
+ * @file File Upload & Magic Bytes Inspection Middleware
+ * @description Secure file upload handling using Multer memory storage and deep magic bytes inspection.
+ * 
+ * @author 3akl
+ */
+
 const multer = require("multer");
 const { AppError } = require("./errorHandler");
 
-// 1. التخزين المبدئي في الـ Memory لفحص الخصائص الأمنية قبل الرفع الدائم
+/**
+ * In-Memory storage buffer allocation
+ */
 const storage = multer.memoryStorage();
 
-// 2. Strict MIME Type Filtering
+/**
+ * MIME Type filtering strategy
+ */
 const fileFilter = (req, file, cb) => {
     const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
 
@@ -15,22 +26,26 @@ const fileFilter = (req, file, cb) => {
     }
 };
 
-// 3. Multer Configuration مع حدود حازمة للـ Payload
+/**
+ * Multer upload options with payload limit safeguards
+ */
 const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 2 * 1024 * 1024, // 2MB Max Size
-        files: 1 // مسموح بملف واحد فقط في الطلب
+        fileSize: 2 * 1024 * 1024, // 2MB Max File Limit
+        files: 1
     }
 });
 
-// 4. Deep Magic Bytes Inspection Middleware (التحقق الفعلي من محتوى الملف)
+/**
+ * Middleware: Inspect upload buffer magic bytes to prevent spoofed binary/script uploads
+ * @author 3akl
+ */
 const validateImageMagicBytes = async (req, res, next) => {
     if (!req.file) return next();
 
     try {
-        // استيراد ديناميكي لمكتبة file-type
         const { fileTypeFromBuffer } = await import("file-type");
         const detectedType = await fileTypeFromBuffer(req.file.buffer);
 

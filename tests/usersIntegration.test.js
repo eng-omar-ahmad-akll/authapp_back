@@ -1,3 +1,10 @@
+/**
+ * @file Users Controller Integration Tests
+ * @description Integration testing for user administrative functions (Role changes, user fetch, updates, and deletes).
+ * 
+ * @author 3akl
+ */
+
 const request = require("supertest");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");

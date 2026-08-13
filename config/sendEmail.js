@@ -1,22 +1,26 @@
-const nodemailer = require("nodemailer");
+/**
+ * @file Database Connection Utility
+ * @description Establishes a secure and persistent connection to MongoDB using Mongoose.
+ * 
+ * @author 3akl
+ */
 
-const sendEmail = async (options) => {
-    const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-        }
-    });
+const mongoose = require("mongoose");
 
-    const mailOptions = {
-        from: `Blog API Admin <${process.env.EMAIL_USER}>`,
-        to: options.email,
-        subject: options.subject,
-        text: options.message
-    };
-
-    await transporter.sendMail(mailOptions);
+/**
+ * Connects to MongoDB cluster with singleton check and fail-safe process exits
+ */
+const connectDB = async () => {
+    if (mongoose.connection.readyState >= 1) {
+        return;
+    }
+    try {
+        const conn = await mongoose.connect(process.env.MONGO_URI);
+        console.log(`MongoDB Connected: ${conn.connection.host}`);
+    } catch (error) {
+        console.error(`Database Connection Error: ${error.message}`);
+        process.exit(1); // Safely abort application process on critical database failure
+    }
 };
 
-module.exports = sendEmail;
+module.exports = connectDB;

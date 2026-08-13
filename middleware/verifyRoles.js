@@ -1,3 +1,16 @@
+/**
+ * @file Role-Based Access Control (RBAC) Middleware
+ * @description Restricts route access based on authorized user roles.
+ * 
+ * @author 3akl
+ */
+
+/**
+ * Higher-order middleware function to verify user authorization against allowed roles
+ * @param {...string} allowedRoles - List of permitted roles (e.g., 'admin', 'author')
+ * @returns {Function} Express middleware function
+ * @author 3akl
+ */
 const verifyRoles = (...allowedRoles) => {
     return (req, res, next) => {
         if (!req.user || !req.user.role) {

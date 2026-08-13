@@ -1,6 +1,12 @@
+/**
+ * @file Email Service Unit Test
+ * @description Mocks Nodemailer/SMTP transport service to verify mail delivery handlers.
+ * 
+ * @author 3akl
+ */
+
 const sendEmail = require("../config/sendEmail");
 
-// عمل Mock لمكتبة Nodemailer أو الخدمة المستخدمة
 jest.mock("../config/sendEmail", () => jest.fn().mockResolvedValue(true));
 
 describe("Email Service Unit Test", () => {

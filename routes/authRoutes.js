@@ -1,3 +1,10 @@
+/**
+ * @file Express Authentication Routes
+ * @description API endpoints routing for registration, login, token refresh, password resets, and 2FA.
+ * 
+ * @author 3akl
+ */
+
 const express = require("express");
 const router = express.Router();
 
@@ -17,28 +24,26 @@ const {
     apiLimiter 
 } = require("../middleware/rateLimiters");
 
-// 1. التسجيل والدخول (عام)
+// Public endpoints
 router.route("/register")
     .post(authLimiter, validateRegister, authController.register);
 
 router.route("/login")
     .post(loginLimiter, validateLogin, authController.login);
 
-// 2. Refresh & Logout
 router.route("/refresh")
     .post(apiLimiter, authController.refresh);
 
 router.route("/logout")
     .post(authController.logout);
 
-// 3. Password Reset (محدد بـ otpLimiter)
 router.route("/forgot-password")
     .post(otpLimiter, validateForgotPassword, authController.forgotPassword);
 
 router.route("/reset-password")
     .post(otpLimiter, validateResetPassword, authController.resetPassword);
 
-// 4. 2FA Routes (محمية بـ verifyJWT)
+// JWT Guarded 2FA endpoints
 router.use(verifyJWT);
 
 router.route("/2fa/setup")

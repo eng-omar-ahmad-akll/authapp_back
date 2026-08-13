@@ -1,3 +1,10 @@
+/**
+ * @file Auth Request Validation Middleware
+ * @description Validates authentication payloads (Register, Login, Password Reset) using Joi schemas.
+ * 
+ * @author 3akl
+ */
+
 const Joi = require("joi");
 
 const options = {
@@ -5,6 +12,9 @@ const options = {
     stripUnknown: true
 };
 
+/**
+ * Strong password policy scheme definition
+ */
 const passwordSchema = Joi.string()
     .min(8)
     .max(128)
@@ -20,6 +30,9 @@ const passwordSchema = Joi.string()
         "string.empty": "Password is required"
     });
 
+/**
+ * Registration request body schema
+ */
 const registerSchema = Joi.object({
     first_name: Joi.string()
         .trim()
@@ -57,6 +70,9 @@ const registerSchema = Joi.object({
     password: passwordSchema
 });
 
+/**
+ * Login request body schema
+ */
 const loginSchema = Joi.object({
     email: Joi.string()
         .email({ tlds: { allow: true } })
@@ -72,6 +88,9 @@ const loginSchema = Joi.object({
     token: Joi.string().trim().optional().allow("", null)
 });
 
+/**
+ * Forgot password request body schema
+ */
 const forgotPasswordSchema = Joi.object({
     email: Joi.string()
         .email({ tlds: { allow: true } })
@@ -80,6 +99,9 @@ const forgotPasswordSchema = Joi.object({
         .required()
 });
 
+/**
+ * Reset password request body schema
+ */
 const resetPasswordSchema = Joi.object({
     email: Joi.string()
         .email({ tlds: { allow: true } })
@@ -93,6 +115,10 @@ const resetPasswordSchema = Joi.object({
     newPassword: passwordSchema
 });
 
+/**
+ * Middleware: Validate user registration request body
+ * @author 3akl
+ */
 const validateRegister = (req, res, next) => {
     const { error, value } = registerSchema.validate(req.body, options);
     if (error) {
@@ -102,6 +128,10 @@ const validateRegister = (req, res, next) => {
     next();
 };
 
+/**
+ * Middleware: Validate user login request body
+ * @author 3akl
+ */
 const validateLogin = (req, res, next) => {
     const { error, value } = loginSchema.validate(req.body, options);
     if (error) {
@@ -111,6 +141,10 @@ const validateLogin = (req, res, next) => {
     next();
 };
 
+/**
+ * Middleware: Validate forgot password email request body
+ * @author 3akl
+ */
 const validateForgotPassword = (req, res, next) => {
     const { error, value } = forgotPasswordSchema.validate(req.body, options);
     if (error) {
@@ -120,6 +154,10 @@ const validateForgotPassword = (req, res, next) => {
     next();
 };
 
+/**
+ * Middleware: Validate reset password request body including OTP
+ * @author 3akl
+ */
 const validateResetPassword = (req, res, next) => {
     const { error, value } = resetPasswordSchema.validate(req.body, options);
     if (error) {

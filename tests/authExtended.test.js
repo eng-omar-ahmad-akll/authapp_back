@@ -1,3 +1,10 @@
+/**
+ * @file Auth Controller Extended Tests
+ * @description Integration tests for JWT Refresh, Logout, and OTP verification flows.
+ * 
+ * @author 3akl
+ */
+
 const request = require("supertest");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
@@ -71,21 +78,20 @@ describe("Auth Controller Extended Tests (Refresh, Logout, OTP)", () => {
         expect([200, 201, 400, 401, 404]).toContain(res.statusCode);
     });
 
-test("POST /auth/verify-otp - Should verify created OTP", async () => {
-    await OTP.create({
-        email: "authextended@example.com",
-        otp: "123456",
-        createdAt: new Date()
+    test("POST /auth/verify-otp - Should verify created OTP", async () => {
+        await OTP.create({
+            email: "authextended@example.com",
+            otp: "123456",
+            createdAt: new Date()
+        });
+
+        const res = await request(app)
+            .post("/auth/verify-otp")
+            .set("Authorization", `Bearer ${authToken}`)
+            .send({ email: "authextended@example.com", otp: "123456" });
+
+        expect([200, 201, 400, 401, 404]).toContain(res.statusCode);
     });
-
-    const res = await request(app)
-        .post("/auth/verify-otp")
-        .set("Authorization", `Bearer ${authToken}`)
-        .send({ email: "authextended@example.com", otp: "123456" });
-
-    // إضافة 404 لمصفوفة التوقع
-    expect([200, 201, 400, 401, 404]).toContain(res.statusCode);
-});
 
     test("POST /auth/reset-password - Should handle password reset", async () => {
         const res = await request(app)

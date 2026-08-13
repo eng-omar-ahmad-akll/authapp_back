@@ -1,8 +1,20 @@
+/**
+ * @file User Validation Middleware
+ * @description Validates user profile update inputs using Joi schemas and regular expressions.
+ * 
+ * @author 3akl
+ */
+
 const Joi = require("joi");
 
-// نمط آمن للأسماء يمنع ReDoS ومجموعات التكرار المتداخلة
+/**
+ * Regex enforcing supported name characters (Latin, Arabic, spaces, apostrophes, hyphens)
+ */
 const namePattern = /^[a-zA-Z\u0600-\u06FF\s'-]+$/;
 
+/**
+ * Schema definition for user profile modifications
+ */
 const updateUserSchema = Joi.object({
     first_name: Joi.string()
         .trim()
@@ -30,9 +42,24 @@ const updateUserSchema = Joi.object({
         .email({ tlds: { allow: true } })
         .trim()
         .lowercase()
-        .max(100)
+        .max(100),
+
+    avatarUrl: Joi.string()
+        .uri()
+        .messages({
+            "string.uri": "avatarUrl must be a valid URL"
+        }),
+
+    avatar: Joi.object({
+        url: Joi.string().uri().allow(""),
+        public_id: Joi.string().allow("")
+    })
 });
 
+/**
+ * Middleware: Validate user profile update request body
+ * @author 3akl
+ */
 const validateUpdateUser = (req, res, next) => {
     const { error, value } = updateUserSchema.validate(req.body, { 
         abortEarly: false, 
@@ -56,4 +83,3 @@ const validateUpdateUser = (req, res, next) => {
 };
 
 module.exports = { validateUpdateUser };
-

@@ -1,7 +1,18 @@
+/**
+ * @file Blog Ownership Authorization Middleware
+ * @description Enforces access control by verifying whether the requester owns the target blog or holds admin permissions.
+ * 
+ * @author 3akl
+ */
+
 const mongoose = require("mongoose");
 const Blog = require("../models/Blog");
 const { AppError, asyncHandler } = require("./errorHandler");
 
+/**
+ * Middleware: Verifies blog author ownership or admin role before routing
+ * @author 3akl
+ */
 const verifyBlogOwnership = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
     const currentUserId = req.user.id.toString();

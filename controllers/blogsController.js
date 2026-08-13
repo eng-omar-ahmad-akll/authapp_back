@@ -1,14 +1,24 @@
+/**
+ * @file Blog Controller
+ * @description Managing blog creation, queries, metadata tracking, and updates.
+ * Implements view cooldown caching to prevent view counter manipulation.
+ * 
+ * @author 3akl
+ */
+
 const asyncHandler = require("express-async-handler");
 const mongoose = require("mongoose");
 const Blog = require("../models/Blog");
-const { uploadToCloudinary, deleteFromCloudinary } = require("../utils/cloudinary");
 
-// In-memory cache for view tracking (IP_BlogID -> Timestamp)
+/**
+ * In-memory view cache mapping IP_BlogID to last view timestamp.
+ * Used for preventing duplicate view counts within a specific window.
+ */
 const viewCache = new Map();
-const VIEW_COOLDOWN_MS = 15 * 60 * 1000; // 15 Minutes
-const MAX_CACHE_SIZE = 10000; // Prevent Memory Leaks
+const VIEW_COOLDOWN_MS = 15 * 60 * 1000; // 15 Minutes Cooldown
+const MAX_CACHE_SIZE = 10000; // LRU boundary to avoid memory exhaustion
 
-// Cleanup memory cache every 1 hour
+// Periodic cleanup task running every 1 hour to purge stale cache entries
 setInterval(() => {
     const now = Date.now();
     for (const [key, timestamp] of viewCache.entries()) {
@@ -18,33 +28,33 @@ setInterval(() => {
     }
 }, 60 * 60 * 1000);
 
-// Helper to resolve User ID safely
+/**
+ * Utility helper to safely extract User ObjectId string from Express request object
+ * @param {Object} user - The authenticated user object from request
+ * @returns {string|null} Mongo ID string or null
+ */
 const getUserId = (user) => {
     if (!user) return null;
     return user.id ? user.id.toString() : user._id?.toString();
 };
 
-// 1. Get All Blogs (Public with Pagination and Filters)
+/**
+ * @route GET /api/blogs
+ * @desc Retrieve paginated list of blog posts with search and category filtering
+ * @access Public
+ * @author 3akl
+ */
 const getAllBlogs = asyncHandler(async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
     const skip = (page - 1) * limit;
 
     const { category, search, author } = req.query;
-
     const filter = {};
 
-    if (category) {
-        filter.category = category;
-    }
-
-    if (author && mongoose.Types.ObjectId.isValid(author)) {
-        filter.author = author;
-    }
-
-    if (search) {
-        filter.$text = { $search: search };
-    }
+    if (category) filter.category = category;
+    if (author && mongoose.Types.ObjectId.isValid(author)) filter.author = author;
+    if (search) filter.$text = { $search: search };
 
     const [blogs, total] = await Promise.all([
         Blog.find(filter)
@@ -69,7 +79,12 @@ const getAllBlogs = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Get Single Blog By ID
+/**
+ * @route GET /api/blogs/:id
+ * @desc Fetch single blog by ID and atomically increment view metrics with cooldown filtering
+ * @access Public
+ * @author 3akl
+ */
 const getBlogById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -115,17 +130,14 @@ const getBlogById = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Create New Blog (Protected: Admin / Publisher)
+/**
+ * @route POST /api/blogs
+ * @desc Create a new blog post supporting direct cover image URLs
+ * @access Private (Authenticated Author/User)
+ * @author 3akl
+ */
 const createBlog = asyncHandler(async (req, res) => {
-    const { title, content, category, tags } = req.body;
-
-    if (!req.file) {
-        res.status(400);
-        throw new Error("Blog cover image is required");
-    }
-
-    // الرفع المباشر عبر الـ Memory Buffer
-    const uploadResult = await uploadToCloudinary(req.file.buffer, "blogs_covers");
+    const { title, content, category, tags, coverImageUrl, coverImage } = req.body;
 
     let parsedTags = [];
     if (tags) {
@@ -141,6 +153,7 @@ const createBlog = asyncHandler(async (req, res) => {
     }
 
     const userId = getUserId(req.user);
+    const finalImageUrl = coverImageUrl || coverImage?.url || "";
 
     const newBlog = await Blog.create({
         title,
@@ -148,8 +161,8 @@ const createBlog = asyncHandler(async (req, res) => {
         category,
         tags: parsedTags,
         coverImage: {
-            url: uploadResult.url,
-            public_id: uploadResult.public_id
+            url: finalImageUrl,
+            public_id: `external_${Date.now()}`
         },
         author: userId
     });
@@ -161,7 +174,12 @@ const createBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. Update Blog (Protected: Admin or Blog Owner)
+/**
+ * @route PUT /api/blogs/:id
+ * @desc Modify existing blog post details with author ownership/admin verification
+ * @access Private (Blog Owner or Admin)
+ * @author 3akl
+ */
 const updateBlog = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -186,7 +204,7 @@ const updateBlog = asyncHandler(async (req, res) => {
         throw new Error("You are not authorized to update this blog");
     }
 
-    const { title, content, category, tags } = req.body;
+    const { title, content, category, tags, coverImageUrl, coverImage } = req.body;
 
     if (title) blog.title = title;
     if (content) blog.content = content;
@@ -204,18 +222,11 @@ const updateBlog = asyncHandler(async (req, res) => {
         }
     }
 
-    if (req.file) {
-        const uploadResult = await uploadToCloudinary(req.file.buffer, "blogs_covers");
-
-        if (blog.coverImage?.public_id) {
-            deleteFromCloudinary(blog.coverImage.public_id).catch((err) =>
-                console.error(`Cloudinary deletion failed: ${err.message}`)
-            );
-        }
-
+    const finalImageUrl = coverImageUrl || coverImage?.url;
+    if (finalImageUrl) {
         blog.coverImage = {
-            url: uploadResult.url,
-            public_id: uploadResult.public_id
+            url: finalImageUrl,
+            public_id: blog.coverImage?.public_id || `external_${Date.now()}`
         };
     }
 
@@ -228,7 +239,12 @@ const updateBlog = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. Delete Blog (Protected: Admin or Blog Owner)
+/**
+ * @route DELETE /api/blogs/:id
+ * @desc Remove blog document permanently with authorization checks
+ * @access Private (Blog Owner or Admin)
+ * @author 3akl
+ */
 const deleteBlog = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -251,12 +267,6 @@ const deleteBlog = asyncHandler(async (req, res) => {
     if (!isOwner && !isAdmin) {
         res.status(403);
         throw new Error("You are not authorized to delete this blog");
-    }
-
-    if (blog.coverImage?.public_id) {
-        deleteFromCloudinary(blog.coverImage.public_id).catch((err) =>
-            console.error(`Cloudinary deletion failed: ${err.message}`)
-        );
     }
 
     await blog.deleteOne();

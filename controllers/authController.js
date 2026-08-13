@@ -1,3 +1,12 @@
+/**
+ * @file Auth Controller
+ * @description Authentication and Authorization Management System.
+ * Handles registration, authentication, JWT tokens (refresh/access), 
+ * multi-factor authentication (2FA), and password resets.
+ * 
+ * @author 3akl
+ */
+
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const speakeasy = require("speakeasy");
@@ -10,7 +19,9 @@ const sendEmail = require("../config/sendEmail");
 const { asyncHandler } = require("../middleware/errorHandler");
 const { addTokenToBlacklist } = require("../utils/tokenBlacklist");
 
-// خيارات الكوكي الموحدة في كل عمليات الإنشاء والمسح لضمان المطابقة الكاملة
+/**
+ * Standardized HTTP-Only cookie configuration used across auth lifecycle.
+ */
 const cookieOptions = {
     httpOnly: true,
     secure: true,
@@ -18,7 +29,12 @@ const cookieOptions = {
     path: "/"
 };
 
-// 1. Register User
+/**
+ * @route POST /api/auth/register
+ * @desc Register a new user and generate initial JWT token pair
+ * @access Public
+ * @author 3akl
+ */
 const register = asyncHandler(async (req, res) => {
     const { first_name, last_name, email, password } = req.body;
     if (!email || !password) {
@@ -79,7 +95,12 @@ const register = asyncHandler(async (req, res) => {
     }
 });
 
-// 2. Login User
+/**
+ * @route POST /api/auth/login
+ * @desc Authenticate user, verify credentials/2FA, and issue fresh JWT token pair
+ * @access Public
+ * @author 3akl
+ */
 const login = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     const cookies = req.cookies;
@@ -194,7 +215,12 @@ const login = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Refresh Access Token
+/**
+ * @route GET /api/auth/refresh
+ * @desc Refresh access token using rotation pattern and detect stolen refresh tokens
+ * @access Public (Requires valid Refresh Token Cookie)
+ * @author 3akl
+ */
 const refresh = asyncHandler(async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) {
@@ -277,7 +303,12 @@ const refresh = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. Logout User
+/**
+ * @route POST /api/auth/logout
+ * @desc Clear refresh token cookie, remove from DB, and blacklist access token
+ * @access Public
+ * @author 3akl
+ */
 const logout = asyncHandler(async (req, res) => {
     const authHeader = req.headers.authorization || req.headers.Authorization;
     
@@ -306,7 +337,12 @@ const logout = asyncHandler(async (req, res) => {
     return res.status(200).json({ status: "success", message: "Successfully logged out and token invalidated" });
 });
 
-// 5. Forgot Password
+/**
+ * @route POST /api/auth/forgot-password
+ * @desc Generate secure numeric OTP code and dispatch password reset email
+ * @access Public
+ * @author 3akl
+ */
 const forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
 
@@ -346,7 +382,12 @@ const forgotPassword = asyncHandler(async (req, res) => {
     return res.status(200).json(genericResponse);
 });
 
-// 6. Reset Password (مع إرسال إشعار أمني عن تعطيل الـ 2FA)
+/**
+ * @route POST /api/auth/reset-password
+ * @desc Validate OTP, update user password, invalidate existing tokens, and disable 2FA safely
+ * @access Public
+ * @author 3akl
+ */
 const resetPassword = asyncHandler(async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
@@ -413,7 +454,6 @@ const resetPassword = asyncHandler(async (req, res) => {
     await user.save();
     await OTP.deleteOne({ _id: otpRecord._id });
 
-    // إرسال تنبيه أمني بريدي للمستخدم
     await sendEmail({
         email: user.email,
         subject: "Security Alert: Two-Factor Authentication Disabled",
@@ -426,7 +466,12 @@ const resetPassword = asyncHandler(async (req, res) => {
     });
 });
 
-// 7. Setup 2FA
+/**
+ * @route POST /api/auth/setup-2fa
+ * @desc Generate temporary TOTP secret and QR code for multi-factor authentication setup
+ * @access Private (Authenticated User)
+ * @author 3akl
+ */
 const setup2FA = asyncHandler(async (req, res) => {
     const userId = req.user.id || req.user;
 
@@ -453,7 +498,12 @@ const setup2FA = asyncHandler(async (req, res) => {
     });
 });
 
-// 8. Verify & Enable 2FA
+/**
+ * @route POST /api/auth/verify-2fa
+ * @desc Verify provided TOTP code against secret and activate 2FA for user account
+ * @access Private (Authenticated User)
+ * @author 3akl
+ */
 const verify2FA = asyncHandler(async (req, res) => {
     const rawToken = req.body?.token || req.body?.twoFactorCode || req.body?.code;
     const userId = req.user.id || req.user;

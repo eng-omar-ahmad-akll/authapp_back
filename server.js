@@ -1,3 +1,10 @@
+/**
+ * @file Main Express Application Entry Point
+ * @description Configures middleware stack, edge security headers, rate limiters, database connections, and server bootstrap.
+ * 
+ * @author 3akl
+ */
+
 require("dotenv").config();
 
 const express = require("express");
@@ -15,6 +22,7 @@ const { apiLimiter } = require("./middleware/rateLimiters");
 
 const app = express();
 
+// Establish Database Connection
 connectDB();
 
 // ==========================================
@@ -121,5 +129,4 @@ if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
   });
 }
 
-// تصدير تطبيق Express بصورة آمنة وسليمة
 module.exports = app;

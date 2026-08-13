@@ -1,10 +1,16 @@
+/**
+ * @file Resource Ownership & ID Validation Security Tests
+ * @description Tests OWASP A01: IDOR (Insecure Direct Object Reference) and Parameter Tampering vulnerabilities.
+ * 
+ * @author 3akl
+ */
+
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const app = require("../server");
 
 describe("3. Resource Ownership & ID Validation (IDOR Tests)", () => {
 
-    // Parameter Tampering / CastError Prevention
     test("validateObjectId - Reject Invalid Mongo ObjectIds immediately", async () => {
         const res = await request(app).get("/blogs/123-invalid-id");
         
@@ -12,7 +18,6 @@ describe("3. Resource Ownership & ID Validation (IDOR Tests)", () => {
         expect(res.body.message).toContain("Invalid Mongo ObjectId format");
     });
 
-    // OWASP A01: IDOR (Insecure Direct Object Reference)
     test("verifyBlogOwnership - Prevent modifying another user's blog", async () => {
         const user1Token = jwt.sign(
             { UserInfo: { id: "60d5ecb8b5c9c22b1c8e1111", roles: ["user"] } },
@@ -28,7 +33,6 @@ describe("3. Resource Ownership & ID Validation (IDOR Tests)", () => {
         expect([403, 404]).toContain(res.statusCode);
     });
 });
-
 
 afterAll(async () => {
     const mongoose = require("mongoose");

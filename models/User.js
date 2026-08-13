@@ -1,3 +1,10 @@
+/**
+ * @file User Mongoose Data Model
+ * @description Main application user model handling credentials, bcrypt hashing, 2FA, lockout mechanisms, and JWT timestamps.
+ * 
+ * @author 3akl
+ */
+
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 
@@ -101,10 +108,16 @@ const userSchema = new mongoose.Schema(
     }
 );
 
+/**
+ * Virtual Getter: Determines whether account is currently locked due to failed attempts
+ */
 userSchema.virtual("isLocked").get(function () {
     return !!(this.lockUntil && this.lockUntil > Date.now());
 });
 
+/**
+ * Pre-save hook: Hashes user password with Bcrypt and updates passwordChangedAt
+ */
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
 
@@ -122,10 +135,22 @@ userSchema.pre("save", async function (next) {
     }
 });
 
+/**
+ * Instance method: Compare input password with stored Bcrypt hash
+ * @param {string} enteredPassword
+ * @returns {Promise<boolean>}
+ * @author 3akl
+ */
 userSchema.methods.matchPassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
 
+/**
+ * Instance method: Verifies if password was modified after JWT token issue date
+ * @param {number} JWTTimestamp
+ * @returns {boolean}
+ * @author 3akl
+ */
 userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
     if (this.passwordChangedAt) {
         const changedTimestamp = parseInt(this.passwordChangedAt.getTime() / 1000, 10);
@@ -134,6 +159,10 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
     return false;
 };
 
+/**
+ * Instance method: Increments failed login count and triggers temporary account lockout
+ * @author 3akl
+ */
 userSchema.methods.incLoginAttempts = async function () {
     if (this.lockUntil && this.lockUntil < Date.now()) {
         return await this.updateOne({

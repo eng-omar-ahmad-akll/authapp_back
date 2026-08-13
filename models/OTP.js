@@ -1,3 +1,10 @@
+/**
+ * @file OTP Mongoose Data Model
+ * @description Temporary storage schema for hashed OTP verification tokens with auto-expiration (TTL).
+ * 
+ * @author 3akl
+ */
+
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 
@@ -25,18 +32,27 @@ const otpSchema = new mongoose.Schema(
         createdAt: { 
             type: Date, 
             default: Date.now, 
-            expires: 600
+            expires: 600 // Auto-deletes document after 10 minutes
         }
     },
     { timestamps: false }
 );
 
+/**
+ * Pre-save hook: Hash OTP code using SHA-256 before persisting
+ */
 otpSchema.pre("save", function (next) {
     if (!this.isModified("otp")) return next();
     this.otp = crypto.createHash("sha256").update(this.otp).digest("hex");
     next();
 });
 
+/**
+ * Instance method: Verify incoming raw OTP candidate against stored hash
+ * @param {string} candidateOTP - Plain text OTP string
+ * @returns {boolean} Matches or not
+ * @author 3akl
+ */
 otpSchema.methods.compareOTP = function (candidateOTP) {
     const hashedCandidate = crypto.createHash("sha256").update(candidateOTP).digest("hex");
     return this.otp === hashedCandidate;
