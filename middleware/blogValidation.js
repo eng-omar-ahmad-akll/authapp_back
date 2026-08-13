@@ -1,4 +1,3 @@
-// blogValidation.js
 const Joi = require("joi");
 
 const createBlogSchema = Joi.object({

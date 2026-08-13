@@ -1,6 +1,6 @@
-// userValidation.js
 const Joi = require("joi");
 
+// نمط آمن للأسماء يمنع ReDoS ومجموعات التكرار المتداخلة
 const namePattern = /^[a-zA-Z\u0600-\u06FF\s'-]+$/;
 
 const updateUserSchema = Joi.object({
@@ -44,7 +44,6 @@ const validateUpdateUser = (req, res, next) => {
         return res.status(400).json({ status: "fail", errors: errorMessages });
     }
 
-    // التحقق الفعلي من وجود حقول معتمدة بعد حذف الحقول المجهولة بواسطة stripUnknown
     if (!value || Object.keys(value).length === 0) {
         return res.status(400).json({ 
             status: "fail", 
@@ -57,3 +56,4 @@ const validateUpdateUser = (req, res, next) => {
 };
 
 module.exports = { validateUpdateUser };
+

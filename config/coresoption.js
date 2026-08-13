@@ -2,14 +2,12 @@ const allowedOrigins = require("./allowedorigin");
 
 const corsOptions = {
     origin: (origin, callback) => {
-        // السماح بالـ Non-browser requests (!origin) فقط في التطوير والتست لتجنب الـ Bypassing في Production
-        const isAllowedOrigin = allowedOrigins.includes(origin);
-        const isNonBrowserInDev = !origin && process.env.NODE_ENV !== "production";
-
-        if (isAllowedOrigin || isNonBrowserInDev) {
+        // السماح بالطلبات التي لا تحتوي على Origin (مثل Server-to-Server أو Curl)
+        // أو التحقق مما إذا كان الـ Origin ضمن القائمة المسموحة
+        if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            callback(new Error("Not allowed by CORS policy"));
+            callback(null, false);
         }
     },
     credentials: true,

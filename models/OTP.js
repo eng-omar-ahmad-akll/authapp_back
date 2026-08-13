@@ -31,7 +31,6 @@ const otpSchema = new mongoose.Schema(
     { timestamps: false }
 );
 
-// استخدام SHA256 لحماية الـ CPU من إجهاد Bcrypt
 otpSchema.pre("save", function (next) {
     if (!this.isModified("otp")) return next();
     this.otp = crypto.createHash("sha256").update(this.otp).digest("hex");

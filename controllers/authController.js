@@ -1,4 +1,3 @@
-// authController.js
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const speakeasy = require("speakeasy");
@@ -195,7 +194,7 @@ const login = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Refresh Access Token (تعديل: استخدام خيارات الكوكي الموحدة)
+// 3. Refresh Access Token
 const refresh = asyncHandler(async (req, res) => {
     const cookies = req.cookies;
     if (!cookies?.jwt) {
@@ -307,7 +306,7 @@ const logout = asyncHandler(async (req, res) => {
     return res.status(200).json({ status: "success", message: "Successfully logged out and token invalidated" });
 });
 
-// 5. Forgot Password (تعديل: حذف الـ OTP القديم أولاً ثم إنشاء مستند جديد بنقاء TTL)
+// 5. Forgot Password
 const forgotPassword = asyncHandler(async (req, res) => {
     const { email } = req.body;
 
@@ -329,7 +328,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
     const otpCode = crypto.randomInt(100000, 1000000).toString();
 
-    // مسح المستندات السابقة وتأكيد السجل لضمان ربط نظيف مع الـ TTL Index
     await OTP.deleteOne({ email: cleanEmail });
     await OTP.create({
         email: cleanEmail,
@@ -348,7 +346,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     return res.status(200).json(genericResponse);
 });
 
-// 6. Reset Password
+// 6. Reset Password (مع إرسال إشعار أمني عن تعطيل الـ 2FA)
 const resetPassword = asyncHandler(async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
@@ -399,7 +397,7 @@ const resetPassword = asyncHandler(async (req, res) => {
         throw new Error("OTP code has already been used or processed in a concurrent request.");
     }
 
-    const user = await User.findOne({ email: cleanEmail }).select("+refreshTokens");
+    const user = await User.findOne({ email: cleanEmail }).select("+refreshTokens +passwordChangedAt");
     if (!user) {
         res.status(404);
         throw new Error("User not found");
@@ -407,14 +405,20 @@ const resetPassword = asyncHandler(async (req, res) => {
 
     user.password = newPassword;
     user.refreshTokens = [];
-    
+    user.passwordChangedAt = Date.now() - 1000;
     user.isTwoFactorEnabled = false;
     user.twoFactorSecret = undefined;
     user.tempTwoFactorSecret = undefined;
 
     await user.save();
-
     await OTP.deleteOne({ _id: otpRecord._id });
+
+    // إرسال تنبيه أمني بريدي للمستخدم
+    await sendEmail({
+        email: user.email,
+        subject: "Security Alert: Two-Factor Authentication Disabled",
+        message: "Your password was recently reset and 2FA has been disabled for safety. If you did not request this, please secure your account immediately."
+    });
 
     return res.status(200).json({
         status: "success",

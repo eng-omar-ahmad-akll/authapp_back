@@ -1,11 +1,10 @@
-// rateLimiters.js
 const rateLimit = require("express-rate-limit");
 
 /**
- * دالة آمنة لاستخراج IP الحقيقي للعميل لتفادي IP Spoofing و IP Collisions خلف البروكسي
+ * الاعتماد الصارم على req.ip الذي يتكفل Express بالتحقق منه بأمان عند ضبط trust proxy
  */
 const getClientIp = (req) => {
-    return req.ip || req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "127.0.0.1";
+    return req.ip || req.socket.remoteAddress || "127.0.0.1";
 };
 
 /**

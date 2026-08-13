@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const Blog = require("../models/Blog");
-const { asyncHandler } = require("./errorHandler");
+const { AppError, asyncHandler } = require("./errorHandler");
 
 const verifyBlogOwnership = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
@@ -8,23 +8,20 @@ const verifyBlogOwnership = asyncHandler(async (req, res, next) => {
     const currentUserRole = req.user.role;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-        res.status(400);
-        throw new Error("Invalid Blog ID format");
+        return next(new AppError("Invalid Blog ID format", 400));
     }
 
     const blog = await Blog.findById(id);
 
     if (!blog) {
-        res.status(404);
-        throw new Error("Blog not found");
+        return next(new AppError("Blog not found", 404));
     }
 
     const isAuthor = blog.author.toString() === currentUserId;
     const isAdmin = currentUserRole === "admin";
 
     if (!isAuthor && !isAdmin) {
-        res.status(403);
-        throw new Error("Access Denied: You are not authorized to modify or delete this blog");
+        return next(new AppError("Access Denied: You are not authorized to modify or delete this blog", 403));
     }
 
     req.blog = blog;

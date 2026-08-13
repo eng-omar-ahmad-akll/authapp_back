@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema(
             required: [true, "Password is required"],
             select: false
         },
+        avatar: {
+            url: { type: String, default: "" },
+            public_id: { type: String, default: "" }
+        },
         role: {
             type: String,
             enum: ["user", "author", "admin"],
@@ -140,7 +144,7 @@ userSchema.methods.incLoginAttempts = async function () {
 
     const updates = { $inc: { loginAttempts: 1 } };
     if (this.loginAttempts + 1 >= 5 && !this.isLocked) {
-        updates.$set = { lockUntil: Date.now() + 15 * 60 * 1000 }; // قفل لمدة 15 دقيقة
+        updates.$set = { lockUntil: Date.now() + 15 * 60 * 1000 };
     }
 
     return await this.updateOne(updates);

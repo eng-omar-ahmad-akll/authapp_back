@@ -16,6 +16,10 @@ const blogSchema = new mongoose.Schema(
             minlength: [10, "Content must be at least 10 characters long"],
             maxlength: [50000, "Content cannot exceed 50,000 characters"]
         },
+        coverImage: {
+            url: { type: String, default: "" },
+            public_id: { type: String, default: "" }
+        },
         tags: [
             {
                 type: String,
@@ -49,7 +53,6 @@ const blogSchema = new mongoose.Schema(
     }
 );
 
-// الفهارس المركبة لحماية الأداء عند الاستعلامات ضخمة البيانات
 blogSchema.index({ tags: 1, createdAt: -1 });
 blogSchema.index({ author: 1, createdAt: -1 });
 blogSchema.index({ createdAt: -1 });

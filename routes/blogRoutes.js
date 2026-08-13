@@ -8,32 +8,37 @@ const { verifyBlogOwnership } = require("../middleware/verifyBlogOwnership");
 const { validateCreateBlog, validateUpdateBlog } = require("../middleware/blogValidation");
 const validateObjectId = require("../middleware/validateObjectId");
 const { apiLimiter } = require("../middleware/rateLimiters");
+const { uploadSingleImage, validateImageMagicBytes } = require("../middleware/uploadSecurity");
 
-// 1. المسارات العامة (Public Routes - متاحة للجميع)
+// 1. المسارات العامة
 router.get("/", apiLimiter, blogsController.getAllBlogs);
 router.get("/:id", apiLimiter, validateObjectId("id"), blogsController.getBlogById);
 
-// 2. حماية كل ما يلي بالـ JWT
+// 2. حماية الـ Endpoints التالية بـ JWT
 router.use(verifyJWT);
 
-// 3. إنشاء مقال جديد (حصري لـ Author و Admin)
+// 3. إنشاء مقال جديد
 router.post(
     "/",
     verifyRoles("author", "admin"),
+    uploadSingleImage,
+    validateImageMagicBytes,
     validateCreateBlog,
     blogsController.createBlog
 );
 
-// 4. تعديل مقال (مسموح لـ Author صاحب المقال أو Admin)
+// 4. تعديل مقال (تم تقديم verifyBlogOwnership لمنع استنزاف الموارد/Cloudinary)
 router.patch(
     "/:id",
     validateObjectId("id"),
-    validateUpdateBlog,
     verifyBlogOwnership,
+    uploadSingleImage,
+    validateImageMagicBytes,
+    validateUpdateBlog,
     blogsController.updateBlog
 );
 
-// 5. حذف مقال (مسموح لـ Author صاحب المقال أو Admin)
+// 5. حذف مقال
 router.delete(
     "/:id",
     validateObjectId("id"),

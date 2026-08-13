@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const { asyncHandler } = require("../middleware/errorHandler");
+const { uploadToCloudinary, deleteFromCloudinary } = require("../utils/cloudinary");
 
 const getUserIdFromReq = (req) => {
     if (!req.user) return null;
@@ -45,7 +46,7 @@ const getUserById = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Update User Profile Info (تم التحويل لـ Mongoose Document .save() لتشغيل הـ Middleware Hooks)
+// 3. Update User Profile Info & Avatar (Fix Bug #1: Active Account Enforcement)
 const updateUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -67,19 +68,38 @@ const updateUser = asyncHandler(async (req, res) => {
         throw new Error("Email address cannot be updated via this route. Use email update verification flow.");
     }
 
-    const user = await User.findById(id);
+    // تم إضافة .select("+isActive") صراحة لفحص حالة الحساب المغلق
+    const user = await User.findById(id).select("+isActive");
     if (!user) {
         res.status(404);
         throw new Error("User not found");
     }
 
+    if (user.isActive === false) {
+        res.status(401);
+        throw new Error("Account deactivated or banned");
+    }
+
     let isModified = false;
+
     if (typeof req.body.first_name === "string" && req.body.first_name.trim() !== "") {
         user.first_name = req.body.first_name.trim();
         isModified = true;
     }
     if (typeof req.body.last_name === "string" && req.body.last_name.trim() !== "") {
         user.last_name = req.body.last_name.trim();
+        isModified = true;
+    }
+
+    if (req.file) {
+        if (user.avatar?.public_id) {
+            await deleteFromCloudinary(user.avatar.public_id);
+        }
+        const cloudResult = await uploadToCloudinary(req.file.buffer, "user_avatars");
+        user.avatar = {
+            url: cloudResult.url,
+            public_id: cloudResult.public_id
+        };
         isModified = true;
     }
 
@@ -90,12 +110,12 @@ const updateUser = asyncHandler(async (req, res) => {
 
     await user.save();
 
-    // تجهيز الاستجابة دون إعادة البيانات الحساسة
     const userResponse = user.toObject();
     delete userResponse.password;
     delete userResponse.twoFactorSecret;
     delete userResponse.tempTwoFactorSecret;
     delete userResponse.refreshTokens;
+    delete userResponse.isActive;
 
     return res.status(200).json({
         status: "success",
@@ -155,7 +175,7 @@ const changeUserRole = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. Delete User
+// 5. Delete User (مع مسح الـ Avatar إذا كان موجوداً)
 const deleteUser = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
@@ -175,6 +195,10 @@ const deleteUser = asyncHandler(async (req, res) => {
     if (!user) {
         res.status(404);
         throw new Error("User not found");
+    }
+
+    if (user.avatar?.public_id) {
+        await deleteFromCloudinary(user.avatar.public_id);
     }
 
     await user.deleteOne();

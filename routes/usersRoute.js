@@ -15,6 +15,7 @@ const { verifyOwnershipOrAdmin } = require("../middleware/verifyOwnership");
 const validateObjectId = require("../middleware/validateObjectId");
 const { validateUpdateUser } = require("../middleware/userValidation");
 const { apiLimiter } = require("../middleware/rateLimiters");
+const { uploadSingleImage, validateImageMagicBytes } = require("../middleware/uploadSecurity");
 
 router.use(verifyJWT);
 
@@ -29,7 +30,7 @@ router.patch(
     changeUserRole
 );
 
-// 3. مسارات المستخدم المحددة بمعرف ID
+// 3. مسارات المستخدم المحددة
 router.route("/:id")
     .all(validateObjectId("id"))
     .get(
@@ -37,7 +38,9 @@ router.route("/:id")
         getUserById
     )
     .patch(
-        verifyOwnershipOrAdmin((req) => req.params.id), // تقديم فحص الصلاحيات والملكية أولاً
+        verifyOwnershipOrAdmin((req) => req.params.id),
+        uploadSingleImage,
+        validateImageMagicBytes,
         validateUpdateUser, 
         updateUser
     )

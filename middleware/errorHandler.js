@@ -1,3 +1,5 @@
+const multer = require("multer");
+
 class AppError extends Error {
     constructor(message, statusCode) {
         super(message);
@@ -30,6 +32,16 @@ const globalErrorHandler = (err, req, res, next) => {
         statusCode = 400;
         message = Object.values(err.errors).map(val => val.message).join(", ");
         isOperational = true;
+    } else if (err instanceof multer.MulterError) {
+        statusCode = 400;
+        isOperational = true;
+        if (err.code === "LIMIT_FILE_SIZE") {
+            message = "File too large. Maximum allowed size is 2MB.";
+        } else if (err.code === "LIMIT_UNEXPECTED_FILE") {
+            message = "Unexpected field name for file upload.";
+        } else {
+            message = `File upload error: ${err.message}`;
+        }
     }
 
     if (!isOperational && !isDev) {
