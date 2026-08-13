@@ -147,8 +147,10 @@ const createBlog = asyncHandler(async (req, res) => {
         content,
         category,
         tags: parsedTags,
-        coverImage: uploadResult.url,
-        coverImagePublicId: uploadResult.public_id,
+        coverImage: {
+            url: uploadResult.url,
+            public_id: uploadResult.public_id
+        },
         author: userId
     });
 
@@ -205,14 +207,16 @@ const updateBlog = asyncHandler(async (req, res) => {
     if (req.file) {
         const uploadResult = await uploadToCloudinary(req.file.buffer, "blogs_covers");
 
-        if (blog.coverImagePublicId) {
-            deleteFromCloudinary(blog.coverImagePublicId).catch((err) =>
+        if (blog.coverImage?.public_id) {
+            deleteFromCloudinary(blog.coverImage.public_id).catch((err) =>
                 console.error(`Cloudinary deletion failed: ${err.message}`)
             );
         }
 
-        blog.coverImage = uploadResult.url;
-        blog.coverImagePublicId = uploadResult.public_id;
+        blog.coverImage = {
+            url: uploadResult.url,
+            public_id: uploadResult.public_id
+        };
     }
 
     const updatedBlog = await blog.save();
@@ -249,8 +253,8 @@ const deleteBlog = asyncHandler(async (req, res) => {
         throw new Error("You are not authorized to delete this blog");
     }
 
-    if (blog.coverImagePublicId) {
-        deleteFromCloudinary(blog.coverImagePublicId).catch((err) =>
+    if (blog.coverImage?.public_id) {
+        deleteFromCloudinary(blog.coverImage.public_id).catch((err) =>
             console.error(`Cloudinary deletion failed: ${err.message}`)
         );
     }
